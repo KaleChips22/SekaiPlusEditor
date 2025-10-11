@@ -110,6 +110,7 @@ const ChartProperties = () => {
             min={0}
             max={100}
             step={0.1}
+            data-suffix='%'
             onChange={(e) =>
               setFormData({
                 ...formData,
@@ -125,6 +126,7 @@ const ChartProperties = () => {
             min={0}
             max={100}
             step={0.1}
+            data-suffix='%'
             onChange={(e) =>
               setFormData({
                 ...formData,
@@ -140,6 +142,7 @@ const ChartProperties = () => {
             min={0}
             max={100}
             step={0.1}
+            data-suffix='%'
             onChange={(e) =>
               setFormData({
                 ...formData,
