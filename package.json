@@ -1,6 +1,8 @@
 {
   "name": "sekaipluseditor",
   "productName": "Sekai Plus Editor",
+  "description": "A new, electron-based, charting program for making charts for Sonolus",
+  "author": "Kale",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,7 +10,8 @@
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build_all": "tsc && vite build && electron-builder -mwl"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

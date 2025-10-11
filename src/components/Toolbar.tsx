@@ -104,7 +104,7 @@ const ToolBar = () => {
               key={index}
             >
               {typeof tool.icon === 'string' ? (
-                <img src={`/timeline_icons/${tool.icon}.png`} />
+                <img src={`timeline_icons/${tool.icon}.png`} />
               ) : (
                 tool.icon
               )}

@@ -1,12 +1,9 @@
-import { app, BrowserWindow, Menu } from "electron";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-const trafficLightsSize = {
+import { app as o, BrowserWindow as s, Menu as a } from "electron";
+import { fileURLToPath as p } from "node:url";
+import t from "node:path";
+const m = {
   h: 14
-};
-const titleBarHeight = 36;
-const menuData = [
+}, d = 36, u = [
   {
     label: "File",
     submenu: [
@@ -36,95 +33,73 @@ const menuData = [
       { label: "Settings", accelerator: "CmdOrCtrl+," }
     ]
   }
-];
-createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-process.env.APP_ROOT = path.join(__dirname, "..");
-const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
-const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-let win;
-function createWindow() {
-  const trafficLightsOffest = (titleBarHeight - trafficLightsSize.h) / 2;
-  win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+], i = t.dirname(p(import.meta.url));
+process.env.APP_ROOT = t.join(i, "..");
+const l = process.env.VITE_DEV_SERVER_URL, S = t.join(process.env.APP_ROOT, "dist-electron"), n = t.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = l ? t.join(process.env.APP_ROOT, "public") : n;
+let e;
+function c() {
+  const r = (d - m.h) / 2;
+  e = new s({
+    icon: t.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs")
+      preload: t.join(i, "preload.mjs")
     },
-    frame: false,
+    frame: !1,
     titleBarStyle: "hidden",
     trafficLightPosition: {
-      x: trafficLightsOffest,
-      y: trafficLightsOffest - 1
+      x: r,
+      y: r - 1
     },
     minWidth: 724,
     minHeight: 350,
     title: "Sekai Plus Editor"
     // ...(process.platform !== 'darwin' ? { titleBarOverlay: true } : {}),
-  });
-  win.webContents.on("did-finish-load", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", {
+  }), e.webContents.on("did-finish-load", () => {
+    e == null || e.webContents.send("main-process-message", {
       platform: process.platform
     });
-  });
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path.join(RENDERER_DIST, "index.html"));
-  }
-  win.on("enter-full-screen", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", {
-      isFullScreen: true
+  }), l ? e.loadURL(l) : e.loadFile(t.join(n, "index.html")), e.on("enter-full-screen", () => {
+    e == null || e.webContents.send("main-process-message", {
+      isFullScreen: !0
     });
-  });
-  win.on("leave-full-screen", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", {
-      isFullScreen: false
+  }), e.on("leave-full-screen", () => {
+    e == null || e.webContents.send("main-process-message", {
+      isFullScreen: !1
     });
-  });
-  win.webContents.ipc.on("minimize-window", () => {
-    win == null ? void 0 : win.minimize();
-  });
-  win.webContents.ipc.on("maximize-window", () => {
-    (win == null ? void 0 : win.isMaximized()) ? win == null ? void 0 : win.unmaximize() : win == null ? void 0 : win.maximize();
-  });
-  win.webContents.ipc.on("close-window", () => {
-    win == null ? void 0 : win.close();
+  }), e.webContents.ipc.on("minimize-window", () => {
+    e == null || e.minimize();
+  }), e.webContents.ipc.on("maximize-window", () => {
+    e != null && e.isMaximized() ? e == null || e.unmaximize() : e == null || e.maximize();
+  }), e.webContents.ipc.on("close-window", () => {
+    e == null || e.close();
   });
 }
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-    win = null;
-  }
+o.on("window-all-closed", () => {
+  process.platform !== "darwin" && (o.quit(), e = null);
 });
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+o.on("activate", () => {
+  s.getAllWindows().length === 0 && c();
 });
-const menuTemplate = [
+const f = [
   {
     label: "Sekai Plus Editor",
     submenu: [{ role: "about" }]
   },
-  ...menuData
+  ...u
 ];
-app.whenReady().then(() => {
-  const menu = Menu.buildFromTemplate(menuTemplate);
-  Menu.setApplicationMenu(menu);
-  app.setAboutPanelOptions({
+o.whenReady().then(() => {
+  const r = a.buildFromTemplate(f);
+  a.setApplicationMenu(r), o.setAboutPanelOptions({
     applicationName: "Sekai Plus Editor",
-    applicationVersion: app.getVersion(),
+    applicationVersion: o.getVersion(),
     version: "1.0.0",
     copyright: "Copyright © 2025 Sekai Plus Editor"
-  });
-  createWindow();
+  }), c();
 });
-app.setName("Sekai Plus Editor");
+o.setName("Sekai Plus Editor");
 export {
-  MAIN_DIST,
-  RENDERER_DIST,
-  VITE_DEV_SERVER_URL
+  S as MAIN_DIST,
+  n as RENDERER_DIST,
+  l as VITE_DEV_SERVER_URL
 };
