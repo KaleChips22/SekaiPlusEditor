@@ -15,8 +15,8 @@ const EditorFooter = () => {
   })
 
   return (
-    <div className='flex bg-neutral-700 text-sm text-white items-center justify-center'>
-      <div className='flex items-center justify-center p-0.5 pl-2'>
+    <div className='flex bg-neutral-700 text-sm text-white items-center justify-center px-1'>
+      <div className='flex items-center justify-center p-0.5'>
         <Rewind className='size-5 p-0.5' />
         <Square className='size-5 p-0.5' />
         <Play className='size-5 p-0.5' />
@@ -62,15 +62,6 @@ const EditorFooter = () => {
           className='slider px-1 m-1 bg-neutral-800 flex-12'
         />
         <ZoomIn className='size-5 p-0.5' />
-      </div>
-      <div className='text-xs text-neutral-200 space-x-0.5 line-clamp-1'>
-        <span>00:00:65</span>
-        <span>|</span>
-        <span>4/4</span>
-        <span>|</span>
-        <span>160 BPM</span>
-        <span>|</span>
-        <span>1x</span>
       </div>
     </div>
   )
