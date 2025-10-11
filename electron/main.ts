@@ -2,7 +2,11 @@ import { app, BrowserWindow, Menu } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { menuData, titleBarHeight, trafficLightsSize } from '../shared'
+import {
+  menuData,
+  titleBarHeight,
+  trafficLightsSize,
+} from '../shared'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -19,9 +23,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
-export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
+export const VITE_DEV_SERVER_URL =
+  process.env['VITE_DEV_SERVER_URL']
+export const MAIN_DIST = path.join(
+  process.env.APP_ROOT,
+  'dist-electron'
+)
+export const RENDERER_DIST = path.join(
+  process.env.APP_ROOT,
+  'dist'
+)
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, 'public')
@@ -30,9 +41,13 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null
 
 function createWindow() {
-  const trafficLightsOffest = (titleBarHeight - trafficLightsSize.h) / 2
+  const trafficLightsOffest =
+    (titleBarHeight - trafficLightsSize.h) / 2
   win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: path.join(
+      process.env.VITE_PUBLIC,
+      'electron-vite.svg'
+    ),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
@@ -45,7 +60,7 @@ function createWindow() {
     minWidth: 613,
     minHeight: 350,
     title: 'Sekai Plus Editor',
-    ...(process.platform !== 'darwin' ? { titleBarOverlay: true } : {}),
+    // ...(process.platform !== 'darwin' ? { titleBarOverlay: true } : {}),
   })
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
@@ -61,6 +76,18 @@ function createWindow() {
     // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
+
+  win.webContents.ipc.on('minimize-window', () => {
+    win?.minimize()
+  })
+
+  win.webContents.ipc.on('maximize-window', () => {
+    win?.isMaximized() ? win?.unmaximize() : win?.maximize()
+  })
+
+  win.webContents.ipc.on('close-window', () => {
+    win?.close()
+  })
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common

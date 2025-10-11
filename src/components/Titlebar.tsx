@@ -1,10 +1,11 @@
 import { titleBarHeight, trafficLightsSize } from '../../shared'
 
-const trafficLightOffset = (titleBarHeight - trafficLightsSize.h) / 2
+const trafficLightOffset =
+  (titleBarHeight - trafficLightsSize.h) / 2
 const Titlebar = ({ isMac }: { isMac: boolean }) => {
   return (
     <div
-      className='bg-neutral-800 flex items-center justify-center p-2 drag'
+      className='bg-neutral-800 flex items-center justify-center p-2 drag w-fit'
       style={{ height: `${titleBarHeight}px` }}
     >
       {isMac && (
