@@ -73,6 +73,16 @@ function createWindow() {
   } else {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
+  win.on("enter-full-screen", () => {
+    win == null ? void 0 : win.webContents.send("main-process-message", {
+      isFullScreen: true
+    });
+  });
+  win.on("leave-full-screen", () => {
+    win == null ? void 0 : win.webContents.send("main-process-message", {
+      isFullScreen: false
+    });
+  });
   win.webContents.ipc.on("minimize-window", () => {
     win == null ? void 0 : win.minimize();
   });

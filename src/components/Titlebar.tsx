@@ -1,8 +1,14 @@
 import { titleBarHeight, trafficLightsSize } from '../../shared'
 
-const trafficLightOffset =
-  (titleBarHeight - trafficLightsSize.h) / 2
-const Titlebar = ({ isMac }: { isMac: boolean }) => {
+const trafficLightOffset = (titleBarHeight - trafficLightsSize.h) / 2
+
+const Titlebar = ({
+  isMac,
+  isFullscreen,
+}: {
+  isMac: boolean
+  isFullscreen: boolean
+}) => {
   return (
     <div
       className='bg-neutral-800 flex items-center justify-center p-2 drag w-fit'
@@ -14,7 +20,7 @@ const Titlebar = ({ isMac }: { isMac: boolean }) => {
           style={{
             margin: `${trafficLightOffset}px`,
             marginLeft: '2px',
-            width: `${trafficLightsSize.w}px`,
+            width: isFullscreen ? 0 : `${trafficLightsSize.w}px`,
             height: `${trafficLightsSize.h}px`,
           }}
         />

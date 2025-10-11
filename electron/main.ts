@@ -62,6 +62,18 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
+  win.on('enter-full-screen', () => {
+    win?.webContents.send('main-process-message', {
+      isFullScreen: true,
+    })
+  })
+
+  win.on('leave-full-screen', () => {
+    win?.webContents.send('main-process-message', {
+      isFullScreen: false,
+    })
+  })
+
   win.webContents.ipc.on('minimize-window', () => {
     win?.minimize()
   })

@@ -7,18 +7,19 @@ import ToolBar from './components/Toolbar'
 
 const App = () => {
   const [platform, setPlatform] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const isMac = platform === 'darwin'
 
   useEffect(() => {
-    window.ipcRenderer.on(
-      'main-process-message',
-      (_event, message) => {
-        if ('platform' in message) {
-          setPlatform(message.platform)
-        }
+    window.ipcRenderer.on('main-process-message', (_event, message) => {
+      if ('platform' in message) {
+        setPlatform(message.platform)
       }
-    )
+      if ('isFullScreen' in message) {
+        setIsFullscreen(message.isFullScreen)
+      }
+    })
   }, [])
 
   return (
@@ -33,7 +34,10 @@ const App = () => {
         }}
       >
         <div className='flex flex-1 w-full'>
-          <Titlebar isMac={isMac} />
+          <Titlebar
+            isMac={isMac}
+            isFullscreen={isFullscreen}
+          />
           {!isMac && <MenuBar isMac={isMac} />}
         </div>
         <ToolBar />
@@ -41,9 +45,7 @@ const App = () => {
       <div className='flex flex-1 bg-red-500'>
         <div className='h-full w-full bg-green-500 flex flex-col'>
           <div className='flex-1'>editor</div>
-          <div className='w-full p-1 text-sm bg-blue-500'>
-            Options
-          </div>
+          <div className='w-full p-1 text-sm bg-blue-500'>Options</div>
         </div>
         <div className='w-80 bg-yellow-300'>side panel</div>
       </div>
