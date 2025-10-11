@@ -98,7 +98,7 @@ const ToolBar = () => {
             <div
               className={twMerge(
                 'size-5 hover:bg-neutral-700 rounded-xs overflow-hidden flex items-center justify-center p-0.5',
-                activeTool === index && 'bg-purple-600 hover:bg-purple-600'
+                activeTool === index && 'bg-accent hover:bg-accent'
               )}
               onClick={tool.action}
               key={index}
