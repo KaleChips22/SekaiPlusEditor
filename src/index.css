@@ -1,7 +1,56 @@
 @import 'tailwindcss';
 
+@theme {
+  --color-accent: var(--color-purple-500);
+}
+
 @layer base {
   .drag {
     -webkit-app-region: drag;
+  }
+
+  input {
+    @apply rounded-sm;
+  }
+
+  .slider {
+    -webkit-appearance: none; /* For WebKit browsers (Chrome, Safari) */
+    appearance: none; /* Standard property */
+    background: transparent; /* Remove default background */
+    border: none; /* Remove default border */
+    position: relative;
+
+    &::-webkit-slider-runnable-track {
+      -webkit-appearance: none; /* Override default look */
+      appearance: none;
+      padding: 2px;
+    }
+
+    &::-webkit-slider-thumb {
+      -webkit-appearance: none; /* Override default look */
+      appearance: none;
+      width: 8px; /* Set a specific slider handle width */
+      height: 16px; /* Slider handle height */
+      background: var(--color-accent); /* Green background */
+      @apply rounded-xs;
+    }
+
+    &::after {
+      content: attr(value) attr(data-suffix);
+      position: absolute;
+      inset: 0;
+      text-align: center;
+    }
+  }
+}
+
+@layer utilities {
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
   }
 }
