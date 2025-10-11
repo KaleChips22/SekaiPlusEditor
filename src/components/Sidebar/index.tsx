@@ -80,11 +80,7 @@ const Sidebar = () => {
         </div>
         <div className='w-full h-full bg-neutral-700 p-2 text-sm text-white'>
           {tabSelection1 === 'chartProperties' && <ChartProperties />}
-          {tabSelection1 === 'noteProperties' && (
-            <div>
-              Note <span>Properties</span> here
-            </div>
-          )}
+          {tabSelection1 === 'noteProperties' && <div>TODO</div>}
         </div>
         <div className='pt-1 flex-1 text-xs bg-neutral-800 border-b border-accent flex'>
           <div
@@ -98,7 +94,7 @@ const Sidebar = () => {
           </div>
         </div>
         <div className='w-full h-[50%] bg-neutral-700 p-2 text-sm text-white'>
-          {tabSelection2 === 'options' && <ChartProperties />}
+          {tabSelection2 === 'options' && <div>TODO</div>}
         </div>
       </div>
     </>
