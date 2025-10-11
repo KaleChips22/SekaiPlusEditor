@@ -1,9 +1,6 @@
+import { Minus, Square, X } from 'lucide-react'
 import { menuData, titleBarHeight } from '../../shared'
-import {
-  getAccelerator,
-  getMenuItemName,
-  shortcutString,
-} from '../lib'
+import { getAccelerator, getMenuItemName, shortcutString } from '../lib'
 
 const MenuBar = ({ isMac }: { isMac: boolean }) => (
   <div className='flex-1 w-full bg-neutral-800 text-neutral-200 flex items-center justify-start gap-1'>
@@ -43,7 +40,7 @@ const MenuBar = ({ isMac }: { isMac: boolean }) => (
     <div className='flex-1 w-full h-full drag'></div>
     <div className='flex items-center justify-end'>
       <div
-        className='aspect-square flex items-center justify-center hover:bg-neutral-700 text-xl'
+        className='aspect-square flex items-center justify-center hover:bg-neutral-700 text-xl p-2.5'
         style={{
           height: `${titleBarHeight}px`,
         }}
@@ -51,10 +48,10 @@ const MenuBar = ({ isMac }: { isMac: boolean }) => (
           window.ipcRenderer.send('minimize-window')
         }}
       >
-        &#8211;
+        <Minus />
       </div>
       <div
-        className='aspect-square flex items-center justify-center hover:bg-neutral-700 text-xl pb-1'
+        className='aspect-square flex items-center justify-center hover:bg-neutral-700 text-xl p-2.5'
         style={{
           height: `${titleBarHeight}px`,
         }}
@@ -62,10 +59,10 @@ const MenuBar = ({ isMac }: { isMac: boolean }) => (
           window.ipcRenderer.send('maximize-window')
         }}
       >
-        □
+        <Square />
       </div>
       <div
-        className='aspect-square flex items-center justify-center hover:bg-red-700 text-xl pb-1'
+        className='aspect-square flex items-center justify-center hover:bg-red-700 text-xl p-2.5'
         style={{
           height: `${titleBarHeight}px`,
         }}
@@ -73,7 +70,7 @@ const MenuBar = ({ isMac }: { isMac: boolean }) => (
           window.ipcRenderer.send('close-window')
         }}
       >
-        &times;
+        <X />
       </div>
     </div>
   </div>
@@ -81,20 +78,11 @@ const MenuBar = ({ isMac }: { isMac: boolean }) => (
 
 export default MenuBar
 
-const SubmenuItem = ({
-  item,
-  isMac,
-}: {
-  item: any
-  isMac: boolean
-}) => (
+const SubmenuItem = ({ item, isMac }: { item: any; isMac: boolean }) => (
   <div className='w-full flex items-center justify-between'>
     {item?.label ?? getMenuItemName(item.role)}
     <span className='text-sm text-neutral-500'>
-      {shortcutString(
-        item?.accelerator ?? getAccelerator(item.role),
-        isMac
-      )}
+      {shortcutString(item?.accelerator ?? getAccelerator(item.role), isMac)}
     </span>
   </div>
 )
