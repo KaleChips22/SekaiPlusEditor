@@ -5,6 +5,7 @@ import { twMerge } from 'tailwind-merge'
 import MenuBar from './components/MenuBar'
 import ToolBar from './components/Toolbar'
 import Sidebar from './components/Sidebar'
+import EditorFooter from './components/EditorFooter'
 
 const App = () => {
   const [platform, setPlatform] = useState<string | null>(null)
@@ -46,7 +47,7 @@ const App = () => {
       <div className='flex flex-1 bg-red-500'>
         <div className='flex-1 bg-green-500 flex flex-col'>
           <div className='flex-1'>editor</div>
-          <div className='w-full p-1 text-sm bg-blue-500'>Options</div>
+          <EditorFooter />
         </div>
         <Sidebar />
       </div>
