@@ -7,10 +7,26 @@ import ToolBar from './components/Toolbar'
 import Sidebar from './components/Sidebar'
 import EditorFooter from './components/EditorFooter'
 import Editor from './components/Editor'
+import { globalState } from './lib'
 
 const App = () => {
   const [platform, setPlatform] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  const [globalState, setGlobalState] = useState<globalState>({
+    division: 16,
+    selectedTool: 0,
+    zoom: 1,
+  })
+
+  const setZoom = (newZoom: number) =>
+    setGlobalState((p) => ({ ...p, zoom: newZoom }))
+
+  const setDivision = (newDivision: number) =>
+    setGlobalState((p) => ({ ...p, division: newDivision }))
+
+  const setSelectedTool = (newTool: number) =>
+    setGlobalState((p) => ({ ...p, selectedTool: newTool }))
 
   const isMac = platform === 'darwin'
 
@@ -43,16 +59,24 @@ const App = () => {
           />
           {!isMac && <MenuBar isMac={isMac} />}
         </div>
-        <ToolBar />
+        <ToolBar
+          selectedTool={globalState.selectedTool}
+          setSelectedTool={setSelectedTool}
+        />
       </div>
       <div className='flex flex-1 h-full'>
         {/* <div className='flex-1'>editor</div> */}
-        <Editor />
+        <Editor globalState={globalState} />
         {/* <EditorFooter /> */}
         <Sidebar />
       </div>
 
-      <EditorFooter />
+      <EditorFooter
+        zoom={globalState.zoom}
+        setZoom={setZoom}
+        division={globalState.division}
+        setDivision={setDivision}
+      />
     </div>
   )
 }
