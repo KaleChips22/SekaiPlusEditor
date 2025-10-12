@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import draw from '../Editor/draw'
+import draw from '../editor/draw'
 
 const MIN_SIDEBAR_WIDTH = 215
 const MIN_EDITOR_SIZE = 200
