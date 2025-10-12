@@ -128,7 +128,7 @@ app.whenReady().then(() => {
   app.setAboutPanelOptions({
     applicationName: 'Sekai Plus Editor',
     applicationVersion: app.getVersion(),
-    version: '1.0.0',
+    version: app.getVersion(),
     copyright: 'Copyright © 2025 Sekai Plus Editor',
   })
 
