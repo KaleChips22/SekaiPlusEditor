@@ -13,7 +13,7 @@ const MenuBar = ({ isMac }: { isMac: boolean }) => (
           {item.label}
         </div>
 
-        <div className='absolute top-full hidden group-hover:block py-1'>
+        <div className='absolute top-full hidden group-hover:block py-1 z-9999'>
           <div className='p-2 bg-neutral-700 rounded-sm min-w-3xs'>
             {item.submenu.map((subItem, index) =>
               (subItem as any)?.type === 'separator' ? (

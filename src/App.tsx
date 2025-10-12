@@ -6,6 +6,7 @@ import MenuBar from './components/MenuBar'
 import ToolBar from './components/Toolbar'
 import Sidebar from './components/Sidebar'
 import EditorFooter from './components/EditorFooter'
+import Editor from './components/Editor'
 
 const App = () => {
   const [platform, setPlatform] = useState<string | null>(null)
@@ -44,13 +45,14 @@ const App = () => {
         </div>
         <ToolBar />
       </div>
-      <div className='flex flex-1 bg-red-500'>
-        <div className='flex-1 bg-green-500 flex flex-col'>
-          <div className='flex-1'>editor</div>
-          <EditorFooter />
-        </div>
+      <div className='flex flex-1 h-full'>
+        {/* <div className='flex-1'>editor</div> */}
+        <Editor />
+        {/* <EditorFooter /> */}
         <Sidebar />
       </div>
+
+      <EditorFooter />
     </div>
   )
 }

@@ -62,6 +62,14 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
+  win.on('resize', () => {
+    const { width, height } = win!.getContentBounds()
+    win?.webContents.send('resize', {
+      width,
+      height,
+    })
+  })
+
   win.on('enter-full-screen', () => {
     win?.webContents.send('main-process-message', {
       isFullScreen: true,

@@ -1,39 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { twMerge } from 'tailwind-merge'
 import ChartProperties from './ChartProperties'
 
-const MIN_SIDEBAR_WIDTH = 205
-
 const Sidebar = () => {
-  const [sidebarWidth, setSidebarWidth] = useState(300)
-  const startWidth = useRef(0)
-  const startX = useRef(0)
-
-  const onMouseDown = (e: React.MouseEvent) => {
-    startX.current = e.clientX
-    startWidth.current = sidebarWidth
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-  }
-
-  const onMouseUp = () => {
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-  }
-
-  const onMouseMove = (e: MouseEvent) => {
-    const newWidth = startWidth.current - (e.clientX - startX.current)
-    setSidebarWidth(newWidth > MIN_SIDEBAR_WIDTH ? newWidth : MIN_SIDEBAR_WIDTH)
-  }
-
-  useEffect(() => {
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [])
-
   const [tabSelection1, setTabSelection1] = useState<
     'chartProperties' | 'noteProperties'
   >('chartProperties')
@@ -42,18 +11,7 @@ const Sidebar = () => {
 
   return (
     <>
-      <div
-        className='h-full w-3 -mx-1.5 cursor-col-resize group z-50'
-        onMouseDown={onMouseDown}
-      >
-        <div className='h-full w-0.5 group-hover:bg-accent delay-100 transition-all rounded-full mx-auto' />
-      </div>
-      <div
-        className='bg-neutral-800 flex flex-col'
-        style={{
-          width: `${sidebarWidth}px`,
-        }}
-      >
+      <div className='bg-neutral-800 flex flex-col flex-1'>
         <div className='flex-1 text-xs bg-neutral-800 border-b border-accent flex'>
           <div
             className={twMerge(
