@@ -42,7 +42,7 @@ const App = () => {
   }, [])
 
   return (
-    <div className='w-screen h-screen flex flex-col select-none'>
+    <div className='w-screen h-screen flex flex-col select-none overflow-hidden'>
       <div
         className={twMerge(
           'flex items-center justify-center',
