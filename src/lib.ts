@@ -36,3 +36,9 @@ export const shortcutString = (shortcut: string, isMac: boolean) => {
     .join(isMac ? ' ' : ' + ')
     .replace('⌘ ⇧', '⇧ ⌘')
 }
+
+export interface globalState {
+  division: number
+  zoom: number
+  selectedTool: number
+}

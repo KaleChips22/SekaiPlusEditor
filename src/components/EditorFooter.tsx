@@ -6,13 +6,22 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
-import { useState } from 'react'
 
-const EditorFooter = () => {
-  const [formData, setFormData] = useState({
-    division: 16,
-    zoom: 3.0,
-  })
+const EditorFooter = ({
+  zoom,
+  setZoom,
+  division,
+  setDivision,
+}: {
+  zoom: number
+  setZoom: (x: number) => void
+  division: number
+  setDivision: (x: number) => void
+}) => {
+  // const [formData, setFormData] = useState({
+  //   division: 16,
+  //   zoom: 3.0,
+  // })
 
   return (
     <div className='flex bg-neutral-700 text-sm text-white items-center justify-center px-1 absolute bottom-0 left-0 right-0 z-100'>
@@ -23,13 +32,8 @@ const EditorFooter = () => {
         <FastForward className='size-5 p-0.5' />
       </div>
       <select
-        value={formData.division}
-        onChange={(e) =>
-          setFormData({
-            ...formData,
-            division: parseInt(e.currentTarget.value),
-          })
-        }
+        value={division}
+        onChange={(e) => setDivision(parseInt(e.currentTarget.value))}
         className='px-1 m-1 bg-neutral-800 rounded-xs outline-0 ring-0'
       >
         <option value={4}>4 Divison</option>
@@ -51,14 +55,9 @@ const EditorFooter = () => {
           min={0.5}
           max={10.0}
           step={0.1}
-          value={formData.zoom}
+          value={zoom}
           data-suffix='x'
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              zoom: parseFloat(e.currentTarget.value),
-            })
-          }
+          onChange={(e) => setZoom(parseFloat(e.currentTarget.value))}
           className='slider px-1 m-1 bg-neutral-800 flex-12'
         />
         <ZoomIn className='size-5 p-0.5' />

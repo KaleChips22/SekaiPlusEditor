@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import draw from '../editor/draw'
+import { globalState } from '../lib'
 
 const MIN_SIDEBAR_WIDTH = 215
 const MIN_EDITOR_SIZE = 200
 
-const Editor = () => {
+const Editor = ({ globalState }: { globalState: globalState }) => {
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const [screenWidth, setScreenWidth] = useState(window.innerWidth)
   const startWidth = useRef(0)
   const startX = useRef(0)
+  const raf = useRef(0)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -36,18 +38,29 @@ const Editor = () => {
     )
   }
 
+  const getGlobalState = () => globalState
+
+  const runDrawLoop = () => {
+    const canvas = canvasRef.current!
+    draw(
+      canvas.getContext('2d')!,
+      canvas.width,
+      canvas.height,
+      getGlobalState()
+    )
+
+    raf.current = requestAnimationFrame(runDrawLoop)
+  }
+
   useEffect(() => {
     window.ipcRenderer.on('resize', (_e, size) => {
       setScreenWidth(size.width)
     })
 
     const canvas = canvasRef.current!
-    const ctx = canvas.getContext('2d')!
-
-    let raf: number
 
     const resetSize = () => {
-      cancelAnimationFrame(raf)
+      cancelAnimationFrame(raf.current)
       const rect = canvas.getBoundingClientRect()
       const dpr = window.devicePixelRatio || 1
 
@@ -55,12 +68,6 @@ const Editor = () => {
       canvas.height = rect.height * dpr
 
       runDrawLoop()
-    }
-
-    const runDrawLoop = () => {
-      draw(ctx, canvas.width, canvas.height)
-
-      raf = requestAnimationFrame(runDrawLoop)
     }
 
     runDrawLoop()
@@ -76,6 +83,12 @@ const Editor = () => {
       ro.disconnect()
     }
   }, [])
+
+  useEffect(() => {
+    cancelAnimationFrame(raf.current)
+
+    raf.current = requestAnimationFrame(runDrawLoop)
+  }, [globalState])
 
   return (
     <>

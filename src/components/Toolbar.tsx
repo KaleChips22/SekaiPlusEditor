@@ -9,11 +9,17 @@ import {
   Scissors,
   Undo2,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { twMerge } from 'tailwind-merge'
 
-const ToolBar = () => {
-  const [activeTool, setActiveTool] = useState(12) // Default to 'cursor' tool
+const ToolBar = ({
+  selectedTool,
+  setSelectedTool,
+}: {
+  selectedTool: number
+  setSelectedTool: (x: number) => void
+}) => {
+  // const [activeTool, setActiveTool] = useState(12) // Default to 'cursor' tool
 
   const tools = [
     { label: 'new', icon: <FilePlus2 />, action: () => {} },
@@ -31,59 +37,71 @@ const ToolBar = () => {
     {
       label: 'cursor',
       icon: 'timeline_select',
-      action: () => setActiveTool(12),
+      action: () => setSelectedTool(0),
     },
     {
       label: 'tap_note',
       icon: 'timeline_tap',
-      action: () => setActiveTool(13),
+      action: () => setSelectedTool(1),
     },
     {
       label: 'hold_note',
       icon: 'timeline_hold',
-      action: () => setActiveTool(14),
+      action: () => setSelectedTool(2),
     },
     {
       label: 'hold_tick',
       icon: 'timeline_hold_step_normal',
-      action: () => setActiveTool(15),
+      action: () => setSelectedTool(3),
     },
     {
       label: 'flick_note',
       icon: 'timeline_flick_default',
-      action: () => setActiveTool(16),
+      action: () => setSelectedTool(4),
     },
     {
       label: 'gold_note',
       icon: 'timeline_critical',
-      action: () => setActiveTool(17),
+      action: () => setSelectedTool(5),
     },
     {
       label: 'trace_note',
       icon: 'timeline_trace',
-      action: () => setActiveTool(18),
+      action: () => setSelectedTool(6),
     },
     {
       label: 'guide',
       icon: 'timeline_guide_green',
-      action: () => setActiveTool(19),
+      action: () => setSelectedTool(7),
     },
     {
       label: 'bpm_change',
       icon: 'timeline_bpm',
-      action: () => setActiveTool(20),
+      action: () => setSelectedTool(8),
     },
     {
       label: 'time_signature',
       icon: 'timeline_time_signature',
-      action: () => setActiveTool(21),
+      action: () => setSelectedTool(9),
     },
     {
       label: 'hi_speed',
       icon: 'timeline_hi_speed',
-      action: () => setActiveTool(22),
+      action: () => setSelectedTool(10),
     },
   ]
+
+  useEffect(() => {
+    const updateTool = (e: KeyboardEvent) => {
+      const keyNum = parseInt(e.key)
+      if (isNaN(keyNum)) return
+      const newTool = keyNum === 0 ? 10 : keyNum - 1 + +(keyNum > 7)
+      setSelectedTool(newTool)
+    }
+    window.addEventListener('keyup', updateTool)
+
+    return () => window.removeEventListener('keyup', updateTool)
+  }, [])
 
   return (
     <div className='h-full w-full bg-neutral-800 px-1.5 flex items-center text-white'>
@@ -98,7 +116,7 @@ const ToolBar = () => {
             <div
               className={twMerge(
                 'size-5 hover:bg-neutral-700 rounded-xs overflow-hidden flex items-center justify-center p-0.5',
-                activeTool === index && 'bg-accent hover:bg-accent'
+                selectedTool + 12 === index && 'bg-accent hover:bg-accent'
               )}
               onClick={tool.action}
               key={index}

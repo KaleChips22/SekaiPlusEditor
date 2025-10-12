@@ -4,7 +4,7 @@
   appId: 'com.kalechips.sekaipluseditor',
   asar: true,
   productName: 'Sekai Plus Editor',
-  icon: './public/icon/icon.ico
+  icon: './public/icon/icon_512.png',
   directories: {
     output: 'release/${version}',
   },
