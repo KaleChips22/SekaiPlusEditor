@@ -3,6 +3,7 @@
   "productName": "Sekai Plus Editor",
   "description": "A new, electron-based, charting program for making charts for Sonolus",
   "author": "Kale",
+  "icon": "./public/icon/icon.ico",
   "private": true,
   "version": "0.0.1",
   "type": "module",

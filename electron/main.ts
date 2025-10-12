@@ -32,7 +32,7 @@ let win: BrowserWindow | null
 function createWindow() {
   const trafficLightsOffest = (titleBarHeight - trafficLightsSize.h) / 2
   win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: path.join(process.env.VITE_PUBLIC, 'icon/icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },

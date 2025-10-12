@@ -27,7 +27,6 @@ const Editor = () => {
 
   const onMouseMove = (e: MouseEvent) => {
     const newWidth = startWidth.current - (e.clientX - startX.current)
-    console.log(newWidth)
     setSidebarWidth(
       newWidth < MIN_SIDEBAR_WIDTH
         ? MIN_SIDEBAR_WIDTH
@@ -39,7 +38,6 @@ const Editor = () => {
 
   useEffect(() => {
     window.ipcRenderer.on('resize', (_e, size) => {
-      console.log(size)
       setScreenWidth(size.width)
     })
 
@@ -82,7 +80,7 @@ const Editor = () => {
   return (
     <>
       <div
-        className='h-full relative'
+        className='h-full relative pl-2 bg-linear-180 from-neutral-800 to-neutral-700'
         style={{
           width: `${screenWidth - sidebarWidth}px`,
         }}
@@ -92,7 +90,7 @@ const Editor = () => {
           src='bg_image/default.png'
         /> */}
         <canvas
-          className='w-full h-[calc(100%-28px)] z-10'
+          className='w-full h-[calc(100%-28px)] z-10 rounded-md'
           ref={canvasRef}
           style={{
             backgroundImage: "url('bg_image/default.png')",
