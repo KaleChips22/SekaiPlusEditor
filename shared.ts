@@ -17,6 +17,7 @@ export const menuData = [
       { label: 'Export', accelerator: 'CmdOrCtrl+E' },
       { type: 'separator' },
       { role: 'quit' },
+      { role: 'toggleDevTools' },
     ],
   },
   {

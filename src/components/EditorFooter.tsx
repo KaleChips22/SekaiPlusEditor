@@ -15,7 +15,7 @@ const EditorFooter = () => {
   })
 
   return (
-    <div className='flex bg-neutral-700 text-sm text-white items-center justify-center px-1'>
+    <div className='flex bg-neutral-700 text-sm text-white items-center justify-center px-1 absolute bottom-0 left-0 right-0 z-100'>
       <div className='flex items-center justify-center p-0.5'>
         <Rewind className='size-5 p-0.5' />
         <Square className='size-5 p-0.5' />
@@ -44,7 +44,7 @@ const EditorFooter = () => {
         <option value={128}>128 Divison</option>
         <option value={192}>192 Divison</option>
       </select>
-      <div className='flex flex-1 items-center justify-center'>
+      <div className='flex flex-1 items-center justify-center min-w-md'>
         <ZoomOut className='size-5 p-0.5' />
         <input
           type='range'
@@ -63,6 +63,7 @@ const EditorFooter = () => {
         />
         <ZoomIn className='size-5 p-0.5' />
       </div>
+      <div className='flex-1 max-w-sm' />
     </div>
   )
 }
