@@ -182,8 +182,13 @@ const draw = (
 ) => {
   const { zoom, division, selectedTool } = globalState
 
-  const getBeatFromClick = (mouseY: number): number =>
+  const getBeatFromMouse = (mouseY: number): number =>
     Math.max(0, (height - mouseY + yOffset) / (BEAT_HEIGHT * zoom))
+
+  const getLaneFromMouse = (mouseX: number): number =>
+    Math.round(
+      Math.max(-3, Math.min(3, (mouseX - width / 2) / (LANE_WIDTH * 2))) * 2
+    ) / 2
 
   const getNearestDivision = (beat: number): number => {
     const divisionsPerBeat = division / tSigBottom
@@ -194,9 +199,29 @@ const draw = (
     // mouse down event
     if (mouseX === null || mouseY === null) break mouseDown
 
-    let beatClicked = getBeatFromClick(mouseY)
+    const beatClicked = getBeatFromMouse(mouseY)
+    const nearestBeat = getNearestDivision(beatClicked)
+    cursorPos = nearestBeat
 
-    cursorPos = getNearestDivision(beatClicked)
+    if (selectedTool === 0) {
+      // add selecting items later
+      return
+    }
+
+    if ([1, 4, 5, 6].includes(selectedTool)) {
+      const newNote = {
+        type: 'Tap',
+        beat: nearestBeat,
+        lane: getLaneFromMouse(mouseX),
+        size: 1.5,
+        isGold: selectedTool === 5,
+        isTrace: selectedTool === 6,
+        flickDir:
+          selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
+      } as TapNote
+
+      chartNotes.push(newNote)
+    }
   }
 
   mouseUp: if (pMouseIsPressed && !mouseIsPressed) {
@@ -631,6 +656,26 @@ const draw = (
   }
 
   notesToRender.forEach((n) => drawNote(n))
+
+  if (mouseX !== null && mouseY !== null) {
+    if ([1, 4, 5, 6].includes(selectedTool)) {
+      const nearestBeat = getNearestDivision(getBeatFromMouse(mouseY))
+      const newNote = {
+        type: 'Tap',
+        beat: nearestBeat,
+        lane: getLaneFromMouse(mouseX),
+        size: 1.5,
+        isGold: selectedTool === 5,
+        isTrace: selectedTool === 6,
+        flickDir:
+          selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
+      } as TapNote
+
+      ctx.globalAlpha = 0.5
+      drawNote(newNote)
+      ctx.globalAlpha = 1
+    }
+  }
 
   pMouseIsPressed = mouseIsPressed
   pZoom = zoom
