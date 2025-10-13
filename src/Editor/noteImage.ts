@@ -1,4 +1,4 @@
-import * as noteSprites from '../../public/editor_sprites/notes.json'
+import * as noteSprites from '../sprite_sheet/notes.json'
 
 export const getRect = (partName: string) => {
   if (!(partName in noteSprites)) return null
