@@ -7,6 +7,8 @@ The goal of this program is to work as an up-to-date charting program, similar t
 
 Unfortunately, there is no download available yet, as I am not finished making this app. When a stable, working release is ready, it will be available here.
 
+There is a preview version available here: [Download](https://github.com/KaleChips22/SekaiPlusEditor/releases)
+
 ## Electron
 
 This editor is made in electron, which should make it more compatible with a lot more devices, including MacOS support!
@@ -14,3 +16,4 @@ This editor is made in electron, which should make it more compatible with a lot
 ## Progress
 
 My goal is to have all of the features from MikuMikuWorld available first, then MikuMikuWorld4CC, then other stuff. So far I have very little done. Once I complete more, I will post it up here.
+
