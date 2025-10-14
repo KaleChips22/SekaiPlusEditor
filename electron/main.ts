@@ -113,15 +113,29 @@ app.on('activate', () => {
   }
 })
 
-const menuTemplate = [
-  {
-    label: 'Sekai Plus Editor',
-    submenu: [{ role: 'about' }],
-  },
-  ...menuData,
-]
-
 app.whenReady().then(() => {
+  createWindow()
+
+  console.log(win !== null && 'webContents' in win)
+  win!.webContents.send('command', 'hi')
+
+  const menuTemplate = [
+    {
+      label: 'Sekai Plus Editor',
+      submenu: [{ role: 'about' }],
+    },
+    ...menuData.map((i) => ({
+      ...i,
+      submenu: i.submenu.map((j) => ({
+        ...j,
+        click:
+          'action' in j
+            ? () => win?.webContents.send('command', j.action)
+            : () => {},
+      })),
+    })),
+  ]
+
   const menu = Menu.buildFromTemplate(menuTemplate as any)
   Menu.setApplicationMenu(menu)
 
@@ -131,8 +145,6 @@ app.whenReady().then(() => {
     version: app.getVersion(),
     copyright: 'Copyright © 2025 Sekai Plus Editor',
   })
-
-  createWindow()
 })
 
 app.setName('Sekai Plus Editor')
