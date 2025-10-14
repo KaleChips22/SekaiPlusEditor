@@ -189,7 +189,7 @@ export const selectAll = () => {
 }
 
 export const doReturn = () => {
-  yOffset = 0
+  yOffset = -150
   cursorPos = 0
 }
 
