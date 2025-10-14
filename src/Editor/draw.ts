@@ -1,10 +1,12 @@
 import { globalState } from '../lib'
 import {
   BPMChange,
+  EasingType,
   FlickDirection,
   HiSpeed,
   HoldEnd,
   HoldStart,
+  HoldTick,
   TapNote,
   TimeSignature,
   type Note,
@@ -153,6 +155,7 @@ const holdStart = {
   isGold: false,
   isTrace: false,
   isHidden: false,
+  easingType: EasingType.Linear,
 } as HoldStart
 
 const holdEnd = {
@@ -175,6 +178,22 @@ chartNotes.push(holdStart, holdEnd)
 const selectedIndeces = new Set<number>()
 
 export const deleteSelected = () => {
+  chartNotes.forEach((n, i) => {
+    if (!selectedIndeces.has(i)) return
+    if (n.type === 'HoldStart') {
+      let j = n as HoldStart | HoldTick | HoldEnd
+      while ('nextNode' in j) {
+        selectedIndeces.add(chartNotes.indexOf(j.nextNode))
+        j = j.nextNode
+      }
+    } else if (n.type === 'HoldEnd') {
+      let j = n as HoldStart | HoldTick | HoldEnd
+      while ('prevNode' in j) {
+        selectedIndeces.add(chartNotes.indexOf(j.prevNode))
+        j = j.prevNode
+      }
+    }
+  })
   for (let i = chartNotes.length - 1; i > 0; i--) {
     if (selectedIndeces.has(i)) chartNotes.splice(i, 1)
   }
@@ -223,7 +242,7 @@ const draw = (
   height: number,
   globalState: globalState
 ) => {
-  const { zoom, division, selectedTool } = globalState
+  const { zoom, division, selectedTool, visualOptions } = globalState
 
   const getBeatFromMouse = (mouseY: number): number =>
     Math.max(0, (height - mouseY + yOffset) / (BEAT_HEIGHT * zoom))
@@ -421,23 +440,63 @@ const draw = (
         }
 
         selectedIndeces.forEach((i) => {
+          if (selectedTool === 2) {
+            let note = chartNotes[i] as HoldStart | HoldTick
+            if (note.type !== 'HoldStart' && note.type !== 'HoldTick') return
+
+            if (note.easingType === EasingType.Linear)
+              note.easingType = EasingType.EaseOut
+            else if (note.easingType === EasingType.EaseOut)
+              note.easingType = EasingType.EaseIn
+            else if (note.easingType === EasingType.EaseIn)
+              note.easingType = EasingType.Linear
+          }
+
           let note = chartNotes[i] as TapNote
 
-          if (selectedTool === 5) note.isGold = !note.isGold
+          if (selectedTool === 5) {
+            if ((note as any).type !== 'HoldTick') {
+              if (
+                (note as any).type !== 'HoldEnd' ||
+                (note as any as HoldEnd).flickDir !== FlickDirection.None
+              ) {
+                const newGoldStatus = !note.isGold
+                note.isGold = newGoldStatus
+                if ((note as any).type === 'HoldStart') {
+                  let n = chartNotes[i] as HoldStart | HoldTick | HoldEnd
+
+                  while ('nextNode' in n) {
+                    n.nextNode.isGold = newGoldStatus
+                    n = n.nextNode
+                  }
+                }
+              }
+            }
+          }
           if (selectedTool === 6) note.isTrace = !note.isTrace
+
           if (selectedTool === 4) {
-            const current = note.flickDir
-            if (current === FlickDirection.None)
-              note.flickDir = FlickDirection.Default
-            else if (current === FlickDirection.Default)
-              note.flickDir = FlickDirection.Left
-            else if (current === FlickDirection.Left)
-              note.flickDir = FlickDirection.Right
-            else if (current === FlickDirection.Right)
-              note.flickDir = FlickDirection.None
+            if (!['HoldStart', 'HoldTick'].includes((note as any).type)) {
+              const current = note.flickDir
+
+              if (current === FlickDirection.None)
+                note.flickDir = FlickDirection.Default
+              else if (current === FlickDirection.Default)
+                note.flickDir = FlickDirection.Left
+              else if (current === FlickDirection.Left)
+                note.flickDir = FlickDirection.Right
+              else if (current === FlickDirection.Right) {
+                note.flickDir = FlickDirection.None
+
+                if ((note as any).type === 'HoldEnd') {
+                  let n = note as any as HoldEnd
+                  note.isGold = n.prevNode.isGold
+                }
+              }
+            }
           }
         })
-      } else if (![0, 2, 3, 7].includes(selectedTool)) {
+      } else if (![0, 3, 7].includes(selectedTool)) {
         const newLane = Math.min(
           3 - nextNoteOptions.size / 2,
           Math.max(
@@ -450,18 +509,51 @@ const draw = (
               (nextNoteOptions.size % 1 === 0 ? 0 : 0.25)
           )
         )
-        const newNote = {
-          type: 'Tap',
-          beat: nearestBeat,
-          lane: newLane,
-          size: nextNoteOptions.size,
-          isGold: selectedTool === 5,
-          isTrace: selectedTool === 6,
-          flickDir:
-            selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
-        } as TapNote
 
-        chartNotes.push(newNote)
+        if (selectedTool === 2) {
+          const newStartNote = {
+            type: 'HoldStart',
+            beat: nearestBeat,
+            lane: newLane,
+            size: nextNoteOptions.size,
+            isGold: false,
+            isTrace: false,
+            easingType: EasingType.Linear,
+            isGuide: false,
+            isHidden: false,
+          } as HoldStart
+
+          const newEndNote = {
+            type: 'HoldEnd',
+            beat: nearestBeat + tSigBottom / division,
+            lane: newLane,
+            size: nextNoteOptions.size,
+            isGold: false,
+            isTrace: false,
+            flickDir: FlickDirection.None,
+            isGuide: false,
+            isHidden: false,
+            prevNode: newStartNote,
+          } as HoldEnd
+
+          newStartNote.nextNode = newEndNote
+
+          chartNotes.push(newStartNote)
+          chartNotes.push(newEndNote)
+        } else {
+          const newNote = {
+            type: 'Tap',
+            beat: nearestBeat,
+            lane: newLane,
+            size: nextNoteOptions.size,
+            isGold: selectedTool === 5,
+            isTrace: selectedTool === 6,
+            flickDir:
+              selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
+          } as TapNote
+
+          chartNotes.push(newNote)
+        }
       }
     }
   }
@@ -975,10 +1067,57 @@ const draw = (
     ctx.stroke()
   }
 
+  const drawHoldLine = (n: Note) => {
+    const note = n as HoldStart | HoldTick
+    const nextNote = note.nextNode
+
+    const startX = width / 2 + (note.lane - note.size / 2) * 2 * LANE_WIDTH
+    const startW = note.size * 2 * LANE_WIDTH
+    const startY = beatToY(note.beat)
+
+    const endX =
+      width / 2 + (nextNote.lane - nextNote.size / 2) * 2 * LANE_WIDTH
+    const endW = nextNote.size * 2 * LANE_WIDTH
+    const endY = beatToY(nextNote.beat)
+
+    if (visualOptions.drawHolds === 'lite') {
+      ctx.beginPath()
+      ctx.moveTo(startX, startY)
+      ctx.lineTo(startX + startW, startY)
+      if (note.easingType === EasingType.Linear) ctx.lineTo(endX + endW, endY)
+      else if (note.easingType === EasingType.EaseOut)
+        ctx.quadraticCurveTo(
+          endX + endW,
+          (startY + endY) / 2,
+          endX + endW,
+          endY
+        )
+      else
+        ctx.quadraticCurveTo(
+          startX + startW,
+          (startY + endY) / 2,
+          endX + endW,
+          endY
+        )
+      ctx.lineTo(endX, endY)
+      if (note.easingType === EasingType.Linear) ctx.lineTo(startX, startY)
+      else if (note.easingType === EasingType.EaseOut)
+        ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
+      else ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
+
+      if (note.isGold) ctx.fillStyle = '#fbffdcaa'
+      else ctx.fillStyle = '#7fffd3aa'
+      ctx.fill()
+    }
+  }
+
   notesToRender
     .filter((n) => selectedIndeces.has(chartNotes.indexOf(n)))
     .forEach((n) => drawSelectionOutline(n))
 
+  notesToRender.forEach((n) => {
+    if (n.type === 'HoldStart' || n.type === 'HoldTick') drawHoldLine(n)
+  })
   notesToRender.forEach((n) => drawNote(n))
   notesToRender.forEach((n) => drawFlickArrow(n))
 
@@ -1003,7 +1142,7 @@ const draw = (
   }
 
   if (mouseX !== null && mouseY !== null) {
-    if ([1, 4, 5, 6].includes(selectedTool)) {
+    if ([1, 2, 4, 5, 6].includes(selectedTool)) {
       const nearestBeat = getNearestDivision(getBeatFromMouse(mouseY))
       const newLane = Math.min(
         3 - nextNoteOptions.size / 2,
@@ -1017,16 +1156,33 @@ const draw = (
             (nextNoteOptions.size % 1 === 0 ? 0 : 0.25)
         )
       )
-      const newNote = {
-        type: 'Tap',
-        beat: nearestBeat,
-        lane: newLane,
-        size: nextNoteOptions.size,
-        isGold: selectedTool === 5,
-        isTrace: selectedTool === 6,
-        flickDir:
-          selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
-      } as TapNote
+      let newNote: Note
+
+      if (selectedTool === 2)
+        newNote = {
+          type: 'HoldStart',
+          beat: nearestBeat,
+          lane: newLane,
+          size: nextNoteOptions.size,
+          isGold: false,
+          isTrace: false,
+          easingType: EasingType.Linear,
+          flickDir: FlickDirection.None,
+          isHidden: false,
+          isGuide: false,
+          nextNode: {} as HoldEnd,
+        } as HoldStart
+      else
+        newNote = {
+          type: 'Tap',
+          beat: nearestBeat,
+          lane: newLane,
+          size: nextNoteOptions.size,
+          isGold: selectedTool === 5,
+          isTrace: selectedTool === 6,
+          flickDir:
+            selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
+        } as TapNote
 
       ctx.globalAlpha = 0.5
       drawNote(newNote)

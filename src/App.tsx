@@ -18,6 +18,10 @@ const App = () => {
     division: 16,
     selectedTool: 0,
     zoom: 1,
+
+    visualOptions: {
+      drawHolds: 'lite',
+    },
   })
 
   const setZoom = (newZoom: number) =>
