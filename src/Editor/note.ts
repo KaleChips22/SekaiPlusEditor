@@ -75,6 +75,9 @@ export interface HoldTick extends Note {
   lane: number
   size: number
 
+  isGold: boolean
+  isGuide: boolean
+
   tickType: TickType
   easingType: EasingType
 
