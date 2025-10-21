@@ -1,4 +1,4 @@
-import { deleteSelected, doReturn, selectAll } from '../editor/draw'
+import { deleteSelected, selectAll } from '../editor/draw'
 
 const runCommand = (command: string) => {
   switch (command) {
@@ -8,10 +8,6 @@ const runCommand = (command: string) => {
 
     case 'selectAll':
       selectAll()
-      break
-
-    case 'doReturn':
-      doReturn()
       break
 
     default:

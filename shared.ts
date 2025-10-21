@@ -1,5 +1,5 @@
 export const trafficLightsSize = {
-  w: 54,
+  w: 60,
   h: 14,
 }
 
@@ -38,12 +38,6 @@ export const menuData = [
       { label: 'Select All', accelerator: 'CmdOrCtrl+A', action: 'selectAll' },
       { type: 'separator' },
       { label: 'Settings', accelerator: 'CmdOrCtrl+,' },
-    ],
-  },
-  {
-    label: 'View',
-    submenu: [
-      { label: 'Return to Start', accelerator: 'Enter', action: 'doReturn' },
     ],
   },
 ]

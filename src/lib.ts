@@ -41,8 +41,4 @@ export interface globalState {
   division: number
   zoom: number
   selectedTool: number
-
-  visualOptions: {
-    drawHolds: 'lite' | 'full-render'
-  }
 }
