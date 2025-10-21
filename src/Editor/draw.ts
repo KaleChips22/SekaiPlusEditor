@@ -44,9 +44,10 @@ enum DragMode {
 }
 let dragMode = DragMode.None
 
-let nextNoteOptions = {
+export let nextNoteOptions = {
   size: 1.5,
   tickType: TickType.Normal,
+  flickDir: FlickDirection.Default,
 }
 
 const imageSource = document.createElement('img')
@@ -731,7 +732,9 @@ const draw = (
             isGold: selectedTool === 5,
             isTrace: selectedTool === 6,
             flickDir:
-              selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
+              selectedTool === 4
+                ? nextNoteOptions.flickDir
+                : FlickDirection.None,
           } as TapNote
 
           chartNotes.push(newNote)
@@ -1499,7 +1502,7 @@ const draw = (
           isGold: selectedTool === 5,
           isTrace: selectedTool === 6,
           flickDir:
-            selectedTool === 4 ? FlickDirection.Default : FlickDirection.None,
+            selectedTool === 4 ? nextNoteOptions.flickDir : FlickDirection.None,
         } as TapNote
 
       ctx.globalAlpha = 0.5
