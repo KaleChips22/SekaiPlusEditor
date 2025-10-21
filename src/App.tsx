@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar'
 import EditorFooter from './components/EditorFooter'
 import Editor from './components/Editor'
 import { globalState } from './lib'
+import runCommand from './commands'
 
 const App = () => {
   const [platform, setPlatform] = useState<string | null>(null)
@@ -17,6 +18,10 @@ const App = () => {
     division: 16,
     selectedTool: 0,
     zoom: 1,
+
+    visualOptions: {
+      drawHolds: 'lite',
+    },
   })
 
   const setZoom = (newZoom: number) =>
@@ -31,14 +36,25 @@ const App = () => {
   const isMac = platform === 'darwin'
 
   useEffect(() => {
-    window.ipcRenderer.on('main-process-message', (_event, message) => {
+    const mainHandler = (_event: any, message: any) => {
       if ('platform' in message) {
         setPlatform(message.platform)
       }
       if ('isFullScreen' in message) {
         setIsFullscreen(message.isFullScreen)
       }
-    })
+    }
+    window.ipcRenderer.on('main-process-message', mainHandler)
+
+    const commandHandler = (_: any, message: string) => {
+      runCommand(message)
+    }
+    window.ipcRenderer.on('command', commandHandler)
+
+    return () => {
+      window.ipcRenderer.off('main-process-message', mainHandler)
+      window.ipcRenderer.off('command', commandHandler)
+    }
   }, [])
 
   return (

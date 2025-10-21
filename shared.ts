@@ -1,5 +1,5 @@
 export const trafficLightsSize = {
-  w: 54,
+  w: 60,
   h: 14,
 }
 
@@ -26,12 +26,16 @@ export const menuData = [
       { role: 'undo' },
       { role: 'redo' },
       { type: 'separator' },
-      { role: 'delete', accelerator: 'Backspace' },
+      {
+        label: 'Delete',
+        accelerator: 'Backspace',
+        action: 'deleteSelected',
+      },
       { role: 'cut' },
       { role: 'copy' },
       { role: 'paste' },
       { type: 'separator' },
-      { label: 'Select All', accelerator: 'CmdOrCtrl+A' },
+      { label: 'Select All', accelerator: 'CmdOrCtrl+A', action: 'selectAll' },
       { type: 'separator' },
       { label: 'Settings', accelerator: 'CmdOrCtrl+,' },
     ],

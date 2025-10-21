@@ -9,8 +9,10 @@ import {
   Scissors,
   Undo2,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
+import { nextNoteOptions } from '../editor/draw'
+import { FlickDirection, TickType } from '../editor/note'
 
 const ToolBar = ({
   selectedTool,
@@ -20,6 +22,9 @@ const ToolBar = ({
   setSelectedTool: (x: number) => void
 }) => {
   // const [activeTool, setActiveTool] = useState(12) // Default to 'cursor' tool
+
+  const [tickIconNum, setTickIconNum] = useState(0)
+  const [flickIconNum, setFlickIconNum] = useState(0)
 
   const tools = [
     { label: 'new', icon: <FilePlus2 />, action: () => {} },
@@ -51,12 +56,22 @@ const ToolBar = ({
     },
     {
       label: 'hold_tick',
-      icon: 'timeline_hold_step_normal',
+      icon:
+        tickIconNum === 0
+          ? 'timeline_hold_step_normal'
+          : tickIconNum === 1
+          ? 'timeline_hold_step_hidden'
+          : 'timeline_hold_step_skip',
       action: () => setSelectedTool(3),
     },
     {
       label: 'flick_note',
-      icon: 'timeline_flick_default',
+      icon:
+        flickIconNum === 0
+          ? 'timeline_flick_default'
+          : flickIconNum === 1
+          ? 'timeline_flick_left'
+          : 'timeline_flick_right',
       action: () => setSelectedTool(4),
     },
     {
@@ -96,12 +111,31 @@ const ToolBar = ({
       const keyNum = parseInt(e.key)
       if (isNaN(keyNum)) return
       const newTool = keyNum === 0 ? 10 : keyNum - 1 + +(keyNum > 7)
+      if (newTool === selectedTool) {
+        if (newTool === 3) {
+          setTickIconNum((tickIconNum + 1) % 3)
+          nextNoteOptions.tickType = [
+            TickType.Hidden,
+            TickType.Skip,
+            TickType.Normal,
+          ][tickIconNum]
+        }
+
+        if (newTool === 4) {
+          setFlickIconNum((flickIconNum + 1) % 3)
+          nextNoteOptions.flickDir = [
+            FlickDirection.Left,
+            FlickDirection.Right,
+            FlickDirection.Default,
+          ][flickIconNum]
+        }
+      }
       setSelectedTool(newTool)
     }
     window.addEventListener('keyup', updateTool)
 
     return () => window.removeEventListener('keyup', updateTool)
-  }, [])
+  }, [selectedTool, tickIconNum, flickIconNum])
 
   return (
     <div className='h-full w-full bg-neutral-800 px-1.5 flex items-center text-white'>

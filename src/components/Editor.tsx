@@ -38,24 +38,19 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
     )
   }
 
-  const getGlobalState = () => globalState
-
   const runDrawLoop = () => {
     const canvas = canvasRef.current!
-    draw(
-      canvas.getContext('2d')!,
-      canvas.width,
-      canvas.height,
-      getGlobalState()
-    )
+    draw(canvas.getContext('2d')!, canvas.width, canvas.height, globalState)
 
     raf.current = requestAnimationFrame(runDrawLoop)
   }
 
   useEffect(() => {
-    window.ipcRenderer.on('resize', (_e, size) => {
+    const ipcListenerHandler = (_: any, size: any) => {
       setScreenWidth(size.width)
-    })
+    }
+
+    window.ipcRenderer.on('resize', ipcListenerHandler)
 
     const canvas = canvasRef.current!
 
@@ -70,8 +65,6 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
       runDrawLoop()
     }
 
-    runDrawLoop()
-
     resetSize()
 
     const ro = new ResizeObserver(resetSize)
@@ -80,12 +73,15 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
     return () => {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
+      window.ipcRenderer.off('resize', ipcListenerHandler)
       ro.disconnect()
     }
   }, [])
 
   useEffect(() => {
     cancelAnimationFrame(raf.current)
+
+    console.log(globalState)
 
     raf.current = requestAnimationFrame(runDrawLoop)
   }, [globalState])

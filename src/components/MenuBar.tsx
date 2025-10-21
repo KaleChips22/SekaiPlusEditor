@@ -1,6 +1,7 @@
 import { Minus, Square, X } from 'lucide-react'
 import { menuData, titleBarHeight } from '../../shared'
 import { getAccelerator, getMenuItemName, shortcutString } from '../lib'
+import runCommand from '../commands'
 
 const MenuBar = ({ isMac }: { isMac: boolean }) => (
   <div className='flex-1 w-full bg-neutral-800 text-neutral-200 flex items-center justify-start gap-1'>
@@ -79,7 +80,10 @@ const MenuBar = ({ isMac }: { isMac: boolean }) => (
 export default MenuBar
 
 const SubmenuItem = ({ item, isMac }: { item: any; isMac: boolean }) => (
-  <div className='w-full flex items-center justify-between'>
+  <div
+    className='w-full flex items-center justify-between'
+    onClick={() => runCommand(item.action)}
+  >
     {item?.label ?? getMenuItemName(item.role)}
     <span className='text-sm text-neutral-500'>
       {shortcutString(item?.accelerator ?? getAccelerator(item.role), isMac)}
