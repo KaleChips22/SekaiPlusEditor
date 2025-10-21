@@ -39,8 +39,8 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     trafficLightPosition: {
-      x: trafficLightsOffest,
-      y: trafficLightsOffest - 1,
+      x: trafficLightsOffest - 1,
+      y: trafficLightsOffest,
     },
     minWidth: 724,
     minHeight: 350,

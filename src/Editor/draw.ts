@@ -75,7 +75,7 @@ const chartNotes: Note[] = [
     lane: 0,
     BPM: 160,
   } as BPMChange,
-  {
+  /*{
     beat: 0.5,
     lane: 0,
     size: 2,
@@ -147,49 +147,50 @@ const chartNotes: Note[] = [
     isTrace: true,
     flickDir: FlickDirection.Default,
   } as TapNote,
+   */
 ]
 
-const holdStart = {
-  type: 'HoldStart',
-  beat: 4.5,
-  lane: 0,
-  size: 3,
-  isGold: false,
-  isTrace: false,
-  isHidden: false,
-  isGuide: false,
-  easingType: EasingType.Linear,
-} as HoldStart
+// const holdStart = {
+//   type: 'HoldStart',
+//   beat: 4.5,
+//   lane: 0,
+//   size: 3,
+//   isGold: false,
+//   isTrace: false,
+//   isHidden: false,
+//   isGuide: false,
+//   easingType: EasingType.Linear,
+// } as HoldStart
 
-const holdTick = {
-  type: 'HoldTick',
-  beat: 5,
-  lane: 0,
-  size: 3,
-  isGold: false,
-  isGuide: false,
-  easingType: EasingType.Linear,
-  tickType: TickType.Normal,
-  prevNode: holdStart,
-} as HoldTick
+// const holdTick = {
+//   type: 'HoldTick',
+//   beat: 5,
+//   lane: 0,
+//   size: 3,
+//   isGold: false,
+//   isGuide: false,
+//   easingType: EasingType.Linear,
+//   tickType: TickType.Normal,
+//   prevNode: holdStart,
+// } as HoldTick
 
-const holdEnd = {
-  type: 'HoldEnd',
-  beat: 6,
-  lane: 0,
-  size: 3,
-  isGold: false,
-  isTrace: false,
-  isHidden: false,
-  flickDir: FlickDirection.Default,
+// const holdEnd = {
+//   type: 'HoldEnd',
+//   beat: 6,
+//   lane: 0,
+//   size: 3,
+//   isGold: false,
+//   isTrace: false,
+//   isHidden: false,
+//   flickDir: FlickDirection.Default,
 
-  prevNode: holdTick,
-} as HoldEnd
+//   prevNode: holdTick,
+// } as HoldEnd
 
-holdStart.nextNode = holdTick
-holdTick.nextNode = holdEnd
+// holdStart.nextNode = holdTick
+// holdTick.nextNode = holdEnd
 
-chartNotes.push(holdStart, holdTick, holdEnd)
+// chartNotes.push(holdStart, holdTick, holdEnd)
 
 const selectedIndeces = new Set<number>()
 
@@ -209,6 +210,7 @@ export const deleteSelected = () => {
         j = j.prevNode
       }
     } else if (n.type === 'HoldTick') {
+      console.log(n)
       const note = n as HoldTick
       note.prevNode.nextNode = note.nextNode
       note.nextNode.prevNode = note.prevNode
@@ -227,9 +229,77 @@ export const selectAll = () => {
   }
 }
 
-export const doReturn = () => {
-  yOffset = -150
-  cursorPos = 0
+const sortHold = (baseNote: HoldStart | HoldTick | HoldEnd) => {
+  let prevStart: HoldStart | null = null
+  let prevEnd: HoldEnd | null = null
+
+  const allNotes: Note[] = [baseNote]
+  if (baseNote.type === 'HoldStart') prevStart = baseNote
+  if (baseNote.type === 'HoldEnd') prevEnd = baseNote
+
+  if ('prevNode' in baseNote) {
+    let pN: HoldStart | HoldTick | HoldEnd = baseNote
+    while ('prevNode' in pN) {
+      pN = pN.prevNode
+      allNotes.push(pN)
+
+      if (pN.type === 'HoldStart') prevStart = pN
+    }
+  }
+  if ('nextNode' in baseNote) {
+    let nN: HoldStart | HoldTick | HoldEnd = baseNote
+    while ('nextNode' in nN) {
+      nN = nN.nextNode
+      allNotes.push(nN)
+
+      if (nN.type === 'HoldEnd') prevEnd = nN
+    }
+  }
+
+  allNotes.sort((n1, n2) => n1.beat - n2.beat)
+
+  for (let i = 0; i < allNotes.length; i++) {
+    let n = allNotes[i] as HoldStart | HoldEnd | HoldTick
+    console.log(i, n.beat)
+
+    if (i === 0) {
+      n = n as HoldStart
+      n.type = 'HoldStart'
+      delete (n as any).prevNode
+
+      n.isHidden = prevStart?.isHidden ?? false
+      n.isGold = prevStart!.isGold
+      n.isGuide = prevStart!.isGuide
+
+      if (!('easingType' in (n as any))) n.easingType = EasingType.Linear
+    } else if (i === allNotes.length - 1) {
+      n = n as HoldEnd
+      n.type = 'HoldEnd'
+      delete (n as any).nextNode
+
+      n.isHidden = prevEnd?.isHidden ?? false
+
+      n.prevNode = allNotes[i - 1] as any
+      n.prevNode.nextNode = n
+      n.flickDir = prevEnd!.flickDir
+      if (n.flickDir === FlickDirection.None) {
+        n.isGold = prevStart!.isGold
+      }
+    } else {
+      n = n as HoldTick
+      n.type = 'HoldTick'
+
+      n.isGold = prevStart!.isGold
+      n.isGuide = prevStart!.isGuide
+
+      n.prevNode = allNotes[i - 1] as any
+      n.prevNode.nextNode = n
+      if (!('easingType' in (n as any))) n.easingType = EasingType.Linear
+      if (!('tickType' in (n as any))) n.tickType = TickType.Normal
+
+      if (n.isGuide) n.tickType = TickType.Hidden
+    }
+  }
 }
 
 document.addEventListener('mousemove', (e) => {
@@ -253,7 +323,10 @@ document.addEventListener('wheel', (e) => {
 })
 
 document.addEventListener('keyup', (e) => {
-  if (e.key === 'o') deleteSelected()
+  if (e.key === 'Enter') {
+    yOffset = -150
+    cursorPos = 0
+  }
 })
 
 const guideColor = '#38e584'
@@ -265,7 +338,7 @@ const draw = (
   height: number,
   globalState: globalState
 ) => {
-  const { zoom, division, selectedTool, visualOptions } = globalState
+  const { zoom, division, selectedTool } = globalState
 
   const getBeatFromMouse = (mouseY: number): number =>
     Math.max(0, (height - mouseY + yOffset) / (BEAT_HEIGHT * zoom))
@@ -408,6 +481,9 @@ const draw = (
 
     const notesAtPos = chartNotes.filter((n) => {
       const clickedLane = getLaneFromMouse(mouseX!)
+
+      if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type))
+        return false
 
       return (
         n.beat === nearestBeat &&
@@ -695,6 +771,15 @@ const draw = (
 
       selectionStartX = null
       selectionStartY = null
+    }
+
+    if (selectedIndeces.size > 0) {
+      chartNotes
+        .filter((_, i) => selectedIndeces.has(i))
+        .forEach((n) => {
+          if (['HoldStart', 'HoldTick', 'HoldEnd'].includes(n.type))
+            sortHold(n as HoldStart | HoldTick | HoldEnd)
+        })
     }
   }
 
@@ -1260,54 +1345,47 @@ const draw = (
     const endW = nextNote.size * 2 * LANE_WIDTH
     const endY = beatToY(nextNote.beat)
 
-    if (visualOptions.drawHolds === 'lite') {
-      ctx.beginPath()
-      ctx.moveTo(startX, startY)
-      ctx.lineTo(startX + startW, startY)
-      if (note.easingType === EasingType.Linear) ctx.lineTo(endX + endW, endY)
-      else if (note.easingType === EasingType.EaseOut)
-        ctx.quadraticCurveTo(
-          endX + endW,
-          (startY + endY) / 2,
-          endX + endW,
-          endY
-        )
-      else
-        ctx.quadraticCurveTo(
-          startX + startW,
-          (startY + endY) / 2,
-          endX + endW,
-          endY
-        )
-      ctx.lineTo(endX, endY)
-      if (note.easingType === EasingType.Linear) ctx.lineTo(startX, startY)
-      else if (note.easingType === EasingType.EaseOut)
-        ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
-      else ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
+    ctx.beginPath()
+    ctx.moveTo(startX, startY)
+    ctx.lineTo(startX + startW, startY)
+    if (note.easingType === EasingType.Linear) ctx.lineTo(endX + endW, endY)
+    else if (note.easingType === EasingType.EaseOut)
+      ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
+    else
+      ctx.quadraticCurveTo(
+        startX + startW,
+        (startY + endY) / 2,
+        endX + endW,
+        endY
+      )
+    ctx.lineTo(endX, endY)
+    if (note.easingType === EasingType.Linear) ctx.lineTo(startX, startY)
+    else if (note.easingType === EasingType.EaseOut)
+      ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
+    else ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
 
-      if (note.isGuide) {
-        let pN = note as HoldStart | HoldTick | HoldEnd
-        while (pN.type !== 'HoldStart') pN = pN.prevNode
-        let nN = note as HoldEnd | HoldTick | HoldEnd
-        while (nN.type !== 'HoldEnd') nN = nN.nextNode
-        const gY0 = beatToY(pN.beat)
-        const gY1 = beatToY(nN.beat)
-        const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
-        guideGradient.addColorStop(
-          0,
-          (note.isGold ? goldGuideColor : guideColor) + 'bb'
-        )
-        guideGradient.addColorStop(
-          1,
-          (note.isGold ? goldGuideColor : guideColor) + '33'
-        )
-        ctx.fillStyle = guideGradient
-      } else {
-        if (note.isGold) ctx.fillStyle = '#fbffdcaa'
-        else ctx.fillStyle = '#7fffd3aa'
-      }
-      ctx.fill()
+    if (note.isGuide) {
+      let pN = note as HoldStart | HoldTick | HoldEnd
+      while (pN.type !== 'HoldStart') pN = pN.prevNode
+      let nN = note as HoldEnd | HoldTick | HoldEnd
+      while (nN.type !== 'HoldEnd') nN = nN.nextNode
+      const gY0 = beatToY(pN.beat)
+      const gY1 = beatToY(nN.beat)
+      const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
+      guideGradient.addColorStop(
+        0,
+        (note.isGold ? goldGuideColor : guideColor) + 'bb'
+      )
+      guideGradient.addColorStop(
+        1,
+        (note.isGold ? goldGuideColor : guideColor) + '33'
+      )
+      ctx.fillStyle = guideGradient
+    } else {
+      if (note.isGold) ctx.fillStyle = '#fbffdcaa'
+      else ctx.fillStyle = '#7fffd3aa'
     }
+    ctx.fill()
   }
 
   notesToRender
