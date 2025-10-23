@@ -116,7 +116,7 @@ app.on('activate', () => {
 app.whenReady().then(() => {
   createWindow()
 
-  console.log(win !== null && 'webContents' in win)
+  // console.log(win !== null && 'webContents' in win)
   win!.webContents.send('command', 'hi')
 
   const menuTemplate = [

@@ -81,7 +81,7 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
   useEffect(() => {
     cancelAnimationFrame(raf.current)
 
-    console.log(globalState)
+    // console.log(globalState)
 
     raf.current = requestAnimationFrame(runDrawLoop)
   }, [globalState])

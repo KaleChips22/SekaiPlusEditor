@@ -211,7 +211,7 @@ export const deleteSelected = () => {
         j = j.prevNode
       }
     } else if (n.type === 'HoldTick') {
-      console.log(n)
+      // console.log(n)
       const note = n as HoldTick
       note.prevNode.nextNode = note.nextNode
       note.nextNode.prevNode = note.prevNode
@@ -261,7 +261,7 @@ const sortHold = (baseNote: HoldStart | HoldTick | HoldEnd) => {
 
   for (let i = 0; i < allNotes.length; i++) {
     let n = allNotes[i] as HoldStart | HoldEnd | HoldTick
-    console.log(i, n.beat)
+    // console.log(i, n.beat)
 
     if (i === 0) {
       n = n as HoldStart
@@ -673,7 +673,7 @@ const draw = (
 
               if (nN.beat <= nearestBeat) return false
 
-              console.log('beat works: ', n)
+              // console.log('beat works: ', n)
 
               const percentY = (nearestBeat - note.beat) / (nN.beat - note.beat)
               const easedY =
@@ -689,7 +689,7 @@ const draw = (
               const minX = (lanePos - sizePos / 2) * 2 * LANE_WIDTH + width / 2
               const maxX = (lanePos + sizePos / 2) * 2 * LANE_WIDTH + width / 2
 
-              console.log(minX, mouseX, maxX)
+              // console.log(minX, mouseX, maxX)
 
               if (!mouseX) return false
 
