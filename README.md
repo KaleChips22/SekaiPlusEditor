@@ -15,5 +15,16 @@ This editor is made in electron, which should make it more compatible with a lot
 
 ## Progress
 
-My goal is to have all of the features from MikuMikuWorld available first, then MikuMikuWorld4CC, then other stuff. So far I have very little done. Once I complete more, I will post it up here.
+These are my to-dos, in order of priority
 
+### To-do:
+
+- [x] Preview Playing with audio
+- [ ] Properly display Time Signature
+- [ ] Editing BPM, Time Signature, Hi Speed
+- [ ] Copy/Paste/Cut
+- [ ] Flip/Flip Paste
+- [ ] Exporting and Importing
+- [ ] Options Panel
+- [ ] Note Properties Panel
+- [ ] Preview Mode
