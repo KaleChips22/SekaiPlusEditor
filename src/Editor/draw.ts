@@ -25,6 +25,8 @@ let pZoom = 0
 
 let cursorPos = 0
 
+let isPlaying = false
+
 let mouseIsPressed = false
 let pMouseIsPressed = false
 let mouseX: number | null = null
@@ -48,6 +50,76 @@ export let nextNoteOptions = {
   size: 1.5,
   tickType: TickType.Normal,
   flickDir: FlickDirection.Default,
+}
+
+const musicPlayer = new Audio()
+
+const noteFxPlayers = {
+  critTick: new Audio('sound/note_sfx/se_live_connect_critical.mp3'),
+  tick: new Audio('sound/note_sfx/se_live_connect.mp3'),
+  critFlick: new Audio('sound/note_sfx/se_live_flick_critical.mp3'),
+  flick: new Audio('sound/note_sfx/se_live_flick.mp3'),
+  critTrace: new Audio('sound/note_sfx/se_live_trace_critical.mp3'),
+  trace: new Audio('sound/note_sfx/se_live_trace.mp3'),
+  critical: new Audio('sound/note_sfx/se_live_critical.mp3'),
+  tap: new Audio('sound/note_sfx/se_live_perfect.mp3'),
+}
+
+let goldHoldsPlaying = 0
+let holdsPlaying = 0
+
+Object.values(noteFxPlayers).forEach((p) => p.load())
+
+const longContext = new AudioContext()
+const longGoldContext = new AudioContext()
+
+let longBuffer: AudioBuffer, longGoldBuffer: AudioBuffer
+let sourceLong: AudioBufferSourceNode, sourceLongGold: AudioBufferSourceNode
+
+const loadSound = async (url: string, audioContext: AudioContext) => {
+  const response = await fetch(url)
+  const arrayBuffer = await response.arrayBuffer()
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+  return audioBuffer
+}
+
+const initSounds = async () => {
+  longBuffer = await loadSound('sound/note_sfx/se_live_long.mp3', longContext)
+  longGoldBuffer = await loadSound(
+    'sound/note_sfx/se_live_long_critical.mp3',
+    longGoldContext
+  )
+}
+
+const playLong = () => {
+  sourceLong = longContext.createBufferSource()
+  sourceLong.buffer = longBuffer
+  sourceLong.connect(longContext.destination)
+  sourceLong.loop = true
+  sourceLong.start(0)
+}
+
+const stopLong = () => {
+  sourceLong.stop()
+}
+
+const playLongGold = () => {
+  sourceLongGold = longGoldContext.createBufferSource()
+  sourceLongGold.buffer = longGoldBuffer
+  sourceLongGold.connect(longGoldContext.destination)
+  sourceLongGold.loop = true
+  sourceLongGold.start(0)
+}
+
+const stopLongGold = () => {
+  sourceLongGold.stop()
+}
+
+initSounds()
+
+export const setMusic = (src: string) => {
+  musicPlayer.src = src
+  musicPlayer.load()
 }
 
 const imageSource = document.createElement('img')
@@ -303,6 +375,22 @@ const sortHold = (baseNote: HoldStart | HoldTick | HoldEnd) => {
   }
 }
 
+const toggleIsPlaying = () => {
+  isPlaying = !isPlaying
+  if (isPlaying) {
+    musicPlayer.load()
+    musicPlayer.currentTime = getTime(cursorPos)
+    musicPlayer.play()
+  } else {
+    musicPlayer.pause()
+
+    Object.values(noteFxPlayers).forEach((p) => {
+      p.pause()
+      p.currentTime = 0
+    })
+  }
+}
+
 document.addEventListener('mousemove', (e) => {
   if ((e.target as HTMLElement).tagName !== 'CANVAS') {
     mouseX = null
@@ -327,18 +415,66 @@ document.addEventListener('keyup', (e) => {
   if (e.key === 'Enter') {
     yOffset = -150
     cursorPos = 0
+    if (isPlaying) toggleIsPlaying()
+  }
+
+  if (e.key === ' ') {
+    toggleIsPlaying()
   }
 })
 
+const getBPM = (beat: number) => {
+  return (
+    chartNotes
+      .filter((n) => n.type === 'BPMChange')
+      .filter((n) => n.beat <= beat)
+      .sort((a, b) => b.beat - a.beat)[0] as BPMChange
+  ).BPM
+}
+
+/**
+ *
+ * @returns time elapsed in seconds
+ */
+const getTime = (beat: number) => {
+  let time = 0
+  const changes = chartNotes.filter(
+    (n) => n.type === 'BPMChange' && n.beat < beat
+  )
+
+  for (let i = 0; i < changes.length; i++) {
+    let beats = 0
+
+    if (i === changes.length - 1) {
+      beats = beat - changes[i].beat
+    } else {
+      beats = changes[i + 1].beat - changes[i].beat
+    }
+
+    time += (beats * 60) / (changes[i] as BPMChange).BPM
+  }
+
+  return time
+}
+
 const guideColor = '#38e584'
 const goldGuideColor = '#ffcd36'
+
+let lastTime: number
 
 const draw = (
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  globalState: globalState
+  globalState: globalState,
+  timeStamp: number
 ) => {
+  if (lastTime == undefined) {
+    lastTime = timeStamp
+  }
+
+  const deltaTime = timeStamp - lastTime
+
   const { zoom, division, selectedTool } = globalState
 
   const getBeatFromMouse = (mouseY: number): number =>
@@ -362,7 +498,8 @@ const draw = (
     dragStartX &&
     dragStartY &&
     mouseX &&
-    mouseY
+    mouseY &&
+    !isPlaying
   ) {
     const xOff = dragStartX - mouseX
 
@@ -472,7 +609,7 @@ const draw = (
     }
   }
 
-  mouseDown: if (!pMouseIsPressed && mouseIsPressed) {
+  mouseDown: if (!pMouseIsPressed && mouseIsPressed && !isPlaying) {
     // mouse down event
     if (mouseX === null || mouseY === null) break mouseDown
 
@@ -743,7 +880,7 @@ const draw = (
     }
   }
 
-  mouseUp: if (pMouseIsPressed && !mouseIsPressed) {
+  mouseUp: if (pMouseIsPressed && !mouseIsPressed && !isPlaying) {
     dragStartX = null
     dragStartY = null
     dragMode = DragMode.None
@@ -784,6 +921,67 @@ const draw = (
             sortHold(n as HoldStart | HoldTick | HoldEnd)
         })
     }
+  }
+
+  if (isPlaying) {
+    const pBeat = cursorPos
+    cursorPos += (getBPM(cursorPos) * deltaTime) / 60000
+    yOffset = cursorPos * BEAT_HEIGHT * zoom - 250
+
+    const time = getTime(cursorPos)
+    // const pTime = time - deltaTime
+
+    chartNotes
+      .filter((n) => n.beat >= pBeat && n.beat < cursorPos)
+      .forEach((n) => {
+        if (['Tap', 'HoldStart', 'HoldEnd'].includes(n.type)) {
+          if (n.type === 'HoldStart') {
+            if ((n as HoldStart).isGold) {
+              if (goldHoldsPlaying === 0) {
+                playLongGold()
+              }
+
+              goldHoldsPlaying++
+            } else {
+              if (holdsPlaying === 0) {
+                playLong()
+              }
+
+              holdsPlaying++
+            }
+
+            if ((n as HoldStart).isHidden) return
+          }
+          if (n.type === 'HoldEnd') {
+            if ((n as HoldEnd).prevNode.isGold) {
+              goldHoldsPlaying--
+
+              if (goldHoldsPlaying === 0) {
+                stopLongGold()
+              }
+            } else {
+              holdsPlaying--
+
+              if (holdsPlaying === 0) {
+                stopLong()
+              }
+            }
+
+            if ((n as HoldEnd).isHidden) return
+          }
+          const note = n as TapNote
+          let p: HTMLAudioElement
+          if (note.flickDir !== FlickDirection.None && n.type !== 'HoldStart') {
+            p = note.isGold ? noteFxPlayers.critFlick : noteFxPlayers.flick
+          } else if (note.isTrace) {
+            p = note.isGold ? noteFxPlayers.critTrace : noteFxPlayers.trace
+          } else {
+            p = note.isGold ? noteFxPlayers.critical : noteFxPlayers.tap
+          }
+          p.currentTime = 0
+          p.play()
+        }
+      })
   }
 
   if (yOffset < -150) {
@@ -1514,15 +1712,14 @@ const draw = (
 
   pMouseIsPressed = mouseIsPressed
   pZoom = zoom
+  lastTime = timeStamp
 
   // ctx.fillStyle = 'white'
   // ctx.fillRect(0, 0, 400, 300)
   // ctx.fillStyle = 'black'
-  // ctx.fillText(
-  //   `dragMode: ${dragMode} | dX: ${dragStartX} | dY: ${dragStartY}`,
-  //   20,
-  //   50
-  // )
+  // ctx.font = '20px Arial'
+  // ctx.textAlign = 'left'
+  // ctx.fillText(`time: ${getTime(cursorPos)}`, 20, 50)
 }
 
 export default draw
