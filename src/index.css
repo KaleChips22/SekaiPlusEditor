@@ -13,6 +13,14 @@
     @apply rounded-sm;
   }
 
+  input:not([type='range']) {
+    @apply px-2;
+  }
+
+  input[type='file']::-webkit-file-upload-button {
+    display: none;
+  }
+
   .slider {
     -webkit-appearance: none; /* For WebKit browsers (Chrome, Safari) */
     appearance: none; /* Standard property */

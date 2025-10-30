@@ -38,9 +38,15 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
     )
   }
 
-  const runDrawLoop = () => {
+  const runDrawLoop = (timeStamp: number) => {
     const canvas = canvasRef.current!
-    draw(canvas.getContext('2d')!, canvas.width, canvas.height, globalState)
+    draw(
+      canvas.getContext('2d')!,
+      canvas.width,
+      canvas.height,
+      globalState,
+      timeStamp
+    )
 
     raf.current = requestAnimationFrame(runDrawLoop)
   }
@@ -62,7 +68,7 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
       canvas.width = rect.width * dpr
       canvas.height = rect.height * dpr
 
-      runDrawLoop()
+      raf.current = requestAnimationFrame(runDrawLoop)
     }
 
     resetSize()
