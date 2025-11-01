@@ -108,6 +108,8 @@ const ToolBar = ({
 
   useEffect(() => {
     const updateTool = (e: KeyboardEvent) => {
+      if (document.activeElement?.nodeName === 'INPUT') return
+
       const keyNum = parseInt(e.key)
       if (isNaN(keyNum)) return
       const newTool = keyNum === 0 ? 10 : keyNum - 1 + +(keyNum > 7)

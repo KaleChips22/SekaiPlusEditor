@@ -1,7 +1,7 @@
 import { Triangle } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { setMusic } from '../../editor/draw'
+import { setMusic, setMusicOffset } from '../../editor/draw'
 
 const ChartProperties = () => {
   const [formData, setFormData] = useState({
@@ -18,6 +18,18 @@ const ChartProperties = () => {
 
   const [metadataExpanded, setMetadataExpanded] = useState(true)
   const [audioExpanded, setAudioExpanded] = useState(true)
+
+  const dragging = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartValue = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      // cleanup: ensure cursor and selection restored if unmounted while dragging
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [])
 
   return (
     <div>
@@ -101,24 +113,65 @@ const ChartProperties = () => {
             if (f && f.length <= 0) return
             const file = f![0]
 
-            const blobUrl = URL.createObjectURL(file)
-            setMusic(blobUrl)
+            setMusic(file)
+
+            // const blobUrl = URL.createObjectURL(file)
+            // setMusic(blobUrl)
 
             e.target.blur()
           }}
         />
         <span>Music Offset</span>
-        <input
-          className='bg-neutral-800/50 outline-none ring-0 text-center'
-          value={formData.musicOffset}
-          type='number'
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              musicOffset: parseFloat(e.currentTarget.value),
-            })
-          }
-        />
+        <div className='flex items-center w-full'>
+          <input
+            className='bg-neutral-800/50 outline-none ring-0 text-center w-full flex-1'
+            value={`${formData.musicOffset} ms`}
+            type='text'
+            // No min/max attributes so value is unbounded
+            onChange={(e) => {
+              const raw = e.currentTarget.value
+              const m = raw.match(/-?\d+(?:\.\d+)?/)
+              const v = m ? parseFloat(m[0]) : 0
+              setFormData((prev) => ({ ...prev, musicOffset: v }))
+              setMusicOffset(Number.isFinite(v) ? v : 0)
+            }}
+            onPointerDown={(e) => {
+              // start drag-to-change behavior
+              e.currentTarget.setPointerCapture(e.pointerId)
+              e.preventDefault()
+              dragging.current = true
+              dragStartX.current = e.clientX
+              dragStartValue.current = Number.isFinite(formData.musicOffset)
+                ? formData.musicOffset
+                : 0
+              // visual feedback: horizontal resize cursor and disable text selection
+              document.body.style.cursor = 'ew-resize'
+              document.body.style.userSelect = 'none'
+            }}
+            onPointerMove={(e) => {
+              if (!dragging.current) return
+              // sensitivity: Shift = fine (0.1 ms/px), Alt = coarse (10 ms/px), default = 1 ms/px
+              const sensitivity = e.shiftKey ? 0.1 : e.altKey ? 10 : 1
+              const delta = e.clientX - dragStartX.current
+              const newVal = Math.round(
+                (dragStartValue.current + delta * sensitivity) * 1
+              ) // ms integer
+              setFormData((prev) => ({ ...prev, musicOffset: newVal }))
+              setMusicOffset(newVal)
+            }}
+            onPointerUp={(e) => {
+              try {
+                e.currentTarget.releasePointerCapture(e.pointerId)
+              } catch {}
+              dragging.current = false
+              document.body.style.cursor = ''
+              document.body.style.userSelect = ''
+            }}
+            // show horizontal-resize cursor on hover to indicate draggable
+            style={{ cursor: 'ew-resize' }}
+          />
+          {/* ms suffix is shown inside the input value now */}
+        </div>
         <span>Master Volume</span>
         <input
           className='bg-neutral-800/50 outline-none ring-0 slider'

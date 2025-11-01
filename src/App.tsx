@@ -9,7 +9,6 @@ import EditorFooter from './components/EditorFooter'
 import Editor from './components/Editor'
 import { globalState } from './lib'
 import runCommand from './commands'
-import ContextMenu from './components/ContextMenu'
 
 const App = () => {
   const [platform, setPlatform] = useState<string | null>(null)
@@ -90,8 +89,6 @@ const App = () => {
         division={globalState.division}
         setDivision={setDivision}
       />
-
-      <ContextMenu />
     </div>
   )
 }

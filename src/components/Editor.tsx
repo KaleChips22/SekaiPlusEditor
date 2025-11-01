@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import draw from '../editor/draw'
 import { globalState } from '../lib'
+import ContextMenu from './ContextMenu'
+import HiSpeedPanel from './HiSpeedPanel'
+import BPMChangePanel from './BPMChangePanel'
+import TimeSignaturePanel from './TimeSignaturePanel'
 
 const MIN_SIDEBAR_WIDTH = 215
 const MIN_EDITOR_SIZE = 200
@@ -112,6 +116,7 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
+          onClick={(e) => e.currentTarget.focus()}
         />
       </div>
       <div
@@ -120,6 +125,11 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
       >
         <div className='h-full w-0.5 group-hover:bg-accent delay-100 transition-all rounded-full mx-auto' />
       </div>
+
+      <ContextMenu />
+      <HiSpeedPanel />
+      <BPMChangePanel />
+      <TimeSignaturePanel />
     </>
   )
 }
