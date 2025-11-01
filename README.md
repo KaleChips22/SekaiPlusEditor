@@ -20,8 +20,8 @@ These are my to-dos, in order of priority
 ### To-do:
 
 - [x] Preview Playing with audio
-- [ ] Properly display Time Signature
-- [ ] Editing BPM, Time Signature, Hi Speed
+- [x] Properly display Time Signature
+- [x] Editing BPM, Time Signature, Hi Speed
 - [ ] Copy/Paste/Cut
 - [ ] Flip/Flip Paste
 - [ ] Exporting and Importing

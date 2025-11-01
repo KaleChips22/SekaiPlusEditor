@@ -18,8 +18,8 @@ const LANE_WIDTH = 55
 const BEAT_HEIGHT = LANE_WIDTH * 4
 const NOTE_HEIGHT = 45
 
-let tSigTop = 4
-let tSigBottom = 4
+// let tSigTop = 4
+// let tSigBottom = 4
 let yOffset = 0
 let pZoom = 0
 
@@ -53,6 +53,7 @@ export let nextNoteOptions = {
 }
 
 const musicPlayer = new Audio()
+let currentMusicUrl: string | null = null
 
 const noteFxPlayers = {
   critTick: new Audio('sound/note_sfx/se_live_connect_critical.mp3'),
@@ -117,9 +118,112 @@ const stopLongGold = () => {
 
 initSounds()
 
-export const setMusic = (src: string) => {
-  musicPlayer.src = src
+// let musicBytes = new Uint8Array()
+
+// decoded PCM waveform (precomputed buckets of peak amplitude 0..1)
+let waveform: Float32Array | null = null
+let waveformDuration = 0 // seconds
+let waveformReady = false
+// music offset in milliseconds. Positive means the audio is ahead of the chart by this many ms.
+export let musicOffsetMs = 0
+
+export const setMusicOffset = (ms: number) => {
+  musicOffsetMs = ms
+}
+
+export const setMusic = (file: File) => {
+  if (!file) return
+
+  // stop any currently playing music and revoke previous object URL
+  const wasPlaying = isPlaying
+  try {
+    musicPlayer.pause()
+    musicPlayer.currentTime = 0
+  } catch (e) {}
+
+  if (currentMusicUrl) {
+    try {
+      URL.revokeObjectURL(currentMusicUrl)
+    } catch (e) {}
+    currentMusicUrl = null
+  }
+
+  const url = URL.createObjectURL(file)
+  currentMusicUrl = url
+
+  musicPlayer.src = url
   musicPlayer.load()
+
+  // if playback was active, continue playing the newly loaded track from cursor
+  if (wasPlaying) {
+    // apply music offset (convert ms -> seconds)
+    const offsetSec = (musicOffsetMs ?? 0) / 1000
+    let startTime = getTime(cursorPos) - offsetSec
+    if (!Number.isFinite(startTime) || startTime < 0) startTime = 0
+    try {
+      if (musicPlayer.duration && !isNaN(musicPlayer.duration)) {
+        startTime = Math.min(startTime, musicPlayer.duration)
+      }
+    } catch (e) {}
+
+    try {
+      musicPlayer.currentTime = startTime
+      // re-trigger play; browsers may require user gesture but this mirrors toggleIsPlaying behavior
+      void musicPlayer.play()
+    } catch (e) {}
+  }
+
+  const loadBytes = async () => {
+    const arrayBuffer = await file.arrayBuffer()
+
+    // keep raw bytes for compatibility/debugging
+    // musicBytes = new Uint8Array(arrayBuffer)
+
+    // decode audio into PCM and precompute waveform buckets
+    try {
+      const audioBuffer = await longContext.decodeAudioData(
+        arrayBuffer.slice(0)
+      )
+
+      waveformDuration = audioBuffer.duration
+
+      // number of buckets to precompute - tradeoff between detail and memory
+      const BUCKETS = 4096
+
+      const numChannels = audioBuffer.numberOfChannels
+      const len = audioBuffer.length
+
+      const samplesPerBucket = Math.max(1, Math.floor(len / BUCKETS))
+      const wf = new Float32Array(BUCKETS)
+
+      for (let i = 0; i < BUCKETS; i++) {
+        const start = i * samplesPerBucket
+        const end = i === BUCKETS - 1 ? len : (i + 1) * samplesPerBucket
+        let peak = 0
+
+        for (let ch = 0; ch < numChannels; ch++) {
+          const channelData = audioBuffer.getChannelData(ch)
+          for (let s = start; s < end; s++) {
+            const v = Math.abs(channelData[s])
+            if (v > peak) peak = v
+          }
+        }
+
+        // clamp to [0,1]
+        wf[i] = Math.max(0, Math.min(1, peak))
+      }
+
+      waveform = wf
+      waveformReady = true
+      console.log('waveform ready', waveformDuration, waveform.length)
+    } catch (e) {
+      console.warn('failed to decode audio for waveform', e)
+      waveform = null
+      waveformReady = false
+    }
+  }
+
+  loadBytes()
 }
 
 const imageSource = document.createElement('img')
@@ -302,6 +406,102 @@ export const selectAll = () => {
   }
 }
 
+export const setHiSpeed = (speed: number) => {
+  if (selectedIndeces.size === 1) {
+    selectedIndeces.forEach((i) => {
+      const note = chartNotes[i]
+
+      if (note.type !== 'HiSpeed') return
+      const n = note as HiSpeed
+
+      n.speed = speed
+    })
+  }
+}
+
+export const getDefaultHiSpeed = () => {
+  let speed = 1
+  if (selectedIndeces.size === 1) {
+    selectedIndeces.forEach((i) => {
+      const note = chartNotes[i]
+
+      if (note.type !== 'HiSpeed') return
+      const n = note as HiSpeed
+
+      speed = n.speed
+    })
+  }
+
+  return speed
+}
+
+export const setBPM = (BPM: number) => {
+  if (selectedIndeces.size === 1) {
+    selectedIndeces.forEach((i) => {
+      const note = chartNotes[i]
+
+      if (note.type !== 'BPMChange') return
+      const n = note as BPMChange
+
+      n.BPM = BPM
+    })
+  }
+}
+
+export const getDefaultBPM = () => {
+  let bpm = 160
+  if (selectedIndeces.size === 1) {
+    selectedIndeces.forEach((i) => {
+      const note = chartNotes[i]
+
+      if (note.type !== 'BPMChange') return
+      const n = note as BPMChange
+
+      bpm = n.BPM
+    })
+  }
+
+  return bpm
+}
+
+export const setTimeSignature = (top: number, bottom: number) => {
+  if (selectedIndeces.size === 1) {
+    selectedIndeces.forEach((i) => {
+      const note = chartNotes[i]
+
+      if (note.type !== 'TimeSignature') return
+      const n = note as TimeSignature
+
+      n.top = top
+      n.bottom = bottom
+    })
+  }
+}
+
+export const getDefaultTimeSignature = () => {
+  let tSig = { top: 4, bottom: 4 }
+  if (selectedIndeces.size === 1) {
+    selectedIndeces.forEach((i) => {
+      const note = chartNotes[i]
+
+      if (note.type !== 'TimeSignature') return
+      const n = note as TimeSignature
+
+      tSig = { top: n.top, bottom: n.bottom }
+    })
+  }
+
+  return tSig
+}
+
+export let hiSpeedPanelShown = false
+export let bpmChangePanelShown = false
+export let TimeSignaturePanelShown = false
+
+export const hideHiSpeedPanel = () => (hiSpeedPanelShown = false)
+export const hideBPMChangePanel = () => (bpmChangePanelShown = false)
+export const hideTimeSignaturePanel = () => (TimeSignaturePanelShown = false)
+
 const sortHold = (baseNote: HoldStart | HoldTick | HoldEnd) => {
   let prevStart: HoldStart | null = null
   let prevEnd: HoldEnd | null = null
@@ -379,10 +579,25 @@ const toggleIsPlaying = () => {
   isPlaying = !isPlaying
   if (isPlaying) {
     musicPlayer.load()
-    musicPlayer.currentTime = getTime(cursorPos)
+    // apply music offset (convert ms -> seconds)
+    const offsetSec = (musicOffsetMs ?? 0) / 1000
+    let startTime = getTime(cursorPos) - offsetSec
+    if (!Number.isFinite(startTime) || startTime < 0) startTime = 0
+    // clamp to duration if available
+    try {
+      if (musicPlayer.duration && !isNaN(musicPlayer.duration)) {
+        startTime = Math.min(startTime, musicPlayer.duration)
+      }
+    } catch (e) {
+      // some browser environments may throw when accessing duration before metadata; ignore
+    }
+
+    musicPlayer.currentTime = startTime
     musicPlayer.play()
   } else {
     musicPlayer.pause()
+    stopLong()
+    stopLongGold()
 
     Object.values(noteFxPlayers).forEach((p) => {
       p.pause()
@@ -432,6 +647,18 @@ const getBPM = (beat: number) => {
   ).BPM
 }
 
+const getTsig = (beat: number) => {
+  const tSig = chartNotes
+    .filter((n) => n.type === 'TimeSignature')
+    .filter((n) => n.beat <= beat)
+    .sort((a, b) => b.beat - a.beat)[0] as TimeSignature
+
+  return {
+    top: tSig.top,
+    bottom: tSig.bottom,
+  }
+}
+
 /**
  *
  * @returns time elapsed in seconds
@@ -477,11 +704,77 @@ const draw = (
 
   const { zoom, division, selectedTool } = globalState
 
-  const getBeatFromMouse = (mouseY: number): number =>
-    Math.max(0, (height - mouseY + yOffset) / (BEAT_HEIGHT * zoom))
+  // Build time-signature segments (used by both mapping helpers and drawDivisions)
+  const buildSegments = () => {
+    const tsEvents = chartNotes
+      .filter((n) => n.type === 'TimeSignature')
+      .sort((a, b) => a.beat - b.beat) as TimeSignature[]
 
-  const beatToY = (beat: number): number =>
-    -(beat * (BEAT_HEIGHT * zoom) - yOffset - height)
+    if (tsEvents.length === 0 || tsEvents[0].beat !== 0) {
+      tsEvents.unshift({
+        type: 'TimeSignature',
+        beat: 0,
+        size: 0,
+        lane: 0,
+        top: 4,
+        bottom: 4,
+      } as TimeSignature)
+    }
+
+    const segs: { start: number; end: number; top: number; bottom: number }[] =
+      []
+    for (let i = 0; i < tsEvents.length; i++) {
+      const start = tsEvents[i].beat
+      const end = i + 1 < tsEvents.length ? tsEvents[i + 1].beat : Infinity
+      segs.push({
+        start,
+        end,
+        top: tsEvents[i].top,
+        bottom: tsEvents[i].bottom,
+      })
+    }
+
+    return segs
+  }
+
+  const segments = buildSegments()
+
+  const getBeatFromMouse = (mouseY: number): number => {
+    // Use a constant pixels-per-beat; beats always have the same height.
+    const ppb = BEAT_HEIGHT * zoom
+    // pixels from beat 0 measured downwards
+    const pixelsFromZero = yOffset + height - mouseY
+
+    if (pixelsFromZero <= 0) return 0
+
+    const beat = pixelsFromZero / ppb
+    return Math.max(0, beat)
+  }
+  //   let beat = 0
+  //   let off = 0
+  //   while (off < yOffset) {
+  //     // const { bottom: tSigBottom } = getTsig(beat)
+  //     off += (BEAT_HEIGHT * zoom * 4) / division
+  //     beat += 4 / division
+  //   }
+
+  //   // if (off - yOffset !== 0 && yOffset > 0) {
+  //   //   beat -= (off - yOffset) / (BEAT_HEIGHT * zoom)
+  //   // }
+
+  //   return beat
+  // }
+
+  const beatToY = (beat: number): number => {
+    const ppb = BEAT_HEIGHT * zoom
+    const pixelsFromZero = Math.max(0, beat) * ppb
+    return height + yOffset - pixelsFromZero
+  }
+
+  const getPixelsFromZero = (beat: number): number => {
+    const ppb = BEAT_HEIGHT * zoom
+    return Math.max(0, beat) * ppb
+  }
 
   const getLaneFromMouse = (mouseX: number): number =>
     Math.round(
@@ -489,8 +782,77 @@ const draw = (
     ) / 2
 
   const getNearestDivision = (beat: number): number => {
-    const divisionsPerBeat = division / tSigBottom
-    return Math.round(beat * divisionsPerBeat) / divisionsPerBeat
+    // subdivisions per quarter-beat (keep beat unit as quarter notes)
+    const divisionsPerQuarter = division / 4
+    return Math.round(beat * divisionsPerQuarter) / divisionsPerQuarter
+  }
+
+  const getEventSize = (
+    event: BPMChange | TimeSignature | HiSpeed
+  ): { width: number; height: number } => {
+    const fontSize = '24px'
+    const fontFamily = 'Arial'
+
+    const textEl = document.createElement('p')
+    textEl.style.fontSize = fontSize
+    textEl.style.fontFamily = fontFamily
+    textEl.style.display = 'inline'
+    textEl.innerText =
+      event.type === 'HiSpeed'
+        ? `${(event as HiSpeed).speed}x`
+        : event.type === 'BPMChange'
+        ? `${(event as BPMChange).BPM} BPM`
+        : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
+    document.body.appendChild(textEl)
+    const { width: textWidth, height: textHeight } =
+      textEl.getBoundingClientRect()
+    textEl.remove()
+    const padding = 8
+
+    return { width: textWidth + 2 * padding, height: textHeight + 2 * padding }
+  }
+
+  const getEventOffset = (
+    event: BPMChange | TimeSignature | HiSpeed
+  ): number => {
+    let off = 20
+    // return event.type === 'BPMChange'
+    //   ? 40
+    //   : event.type === 'TimeSignature'
+    //   ? 180
+    //   : 250
+
+    const notesBefore = chartNotes
+      .filter((n) => ['BPMChange', 'TimeSignature', 'HiSpeed'].includes(n.type))
+      .filter((n) => {
+        const allTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
+        if (allTypes.indexOf(event.type) - allTypes.indexOf(n.type) < 0)
+          return false
+        return (
+          n.beat <= event.beat &&
+          n.beat >= event.beat - 40 / (BEAT_HEIGHT * zoom)
+        )
+      })
+      .sort((a, b) => {
+        const d = b.beat - a.beat
+
+        if (d === 0) {
+          const allTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
+
+          return allTypes.indexOf(b.type) - allTypes.indexOf(a.type)
+        }
+
+        return d
+      })
+      .filter((n) => n !== event)
+
+    if (notesBefore.length > 0)
+      off +=
+        getEventSize(notesBefore[0] as BPMChange | TimeSignature | HiSpeed)
+          .width +
+        getEventOffset(notesBefore[0] as BPMChange | TimeSignature | HiSpeed)
+
+    return off
   }
 
   if (
@@ -583,7 +945,7 @@ const draw = (
     if (dragMode === DragMode.Move) {
       const yOff = dragStartY - mouseY
 
-      const divisionHeight = (BEAT_HEIGHT * zoom) / (division / tSigBottom)
+      const divisionHeight = (BEAT_HEIGHT * zoom) / (division / 4)
       const itter = Math.abs(Math.floor(yOff / divisionHeight))
 
       if (yOff > divisionHeight / 2) {
@@ -591,19 +953,18 @@ const draw = (
 
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
-          .forEach((n) => (n.beat += (tSigBottom / division) * itter))
+          .forEach((n) => (n.beat += (4 / division) * itter))
       } else if (yOff < -divisionHeight / 2) {
         if (
           chartNotes.filter(
-            (n, i) =>
-              selectedIndeces.has(i) && n.beat < (tSigBottom / division) * itter
+            (n, i) => selectedIndeces.has(i) && n.beat < (4 / division) * itter
           ).length === 0
         ) {
           dragStartY += divisionHeight * itter
 
           chartNotes
             .filter((_, i) => selectedIndeces.has(i))
-            .forEach((n) => (n.beat -= (tSigBottom / division) * itter))
+            .forEach((n) => (n.beat -= (4 / division) * itter))
         }
       }
     }
@@ -620,8 +981,20 @@ const draw = (
     const notesAtPos = chartNotes.filter((n) => {
       const clickedLane = getLaneFromMouse(mouseX!)
 
-      if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type))
-        return false
+      if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
+        const o =
+          width / 2 +
+          LANE_WIDTH * 6 +
+          getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
+        const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
+        const b = beatToY(n.beat)
+        return (
+          mouseX! >= o &&
+          mouseX! <= o + s.width &&
+          mouseY! <= b &&
+          mouseY! >= b - s.height
+        )
+      }
 
       return (
         n.beat === nearestBeat &&
@@ -657,10 +1030,24 @@ const draw = (
         selectionStartX = mouseX
         selectionStartY = mouseY
       }
+
+      if (selectedIndeces.size === 1) {
+        selectedIndeces.forEach((i) => {
+          const n = chartNotes[i]
+
+          if (n.type === 'HiSpeed') {
+            hiSpeedPanelShown = true
+          } else if (n.type === 'BPMChange') {
+            bpmChangePanelShown = true
+          } else if (n.type === 'TimeSignature') {
+            TimeSignaturePanelShown = true
+          }
+        })
+      }
     }
 
-    if ([0, 1, 2, 3, 4, 5, 6, 7].includes(selectedTool)) {
-      if (notesAtPos.length > 0) {
+    if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(selectedTool)) {
+      if (notesAtPos.length > 0 && ![8, 9, 10].includes(selectedTool)) {
         if (selectedTool === 0) {
           const noteToDrag = notesAtPos[0]
 
@@ -765,7 +1152,56 @@ const draw = (
           )
         )
 
-        if (selectedTool === 2 || selectedTool === 7) {
+        if (selectedTool === 8) {
+          if (
+            chartNotes.filter(
+              (n) => n.type === 'BPMChange' && n.beat === nearestBeat
+            ).length === 0
+          ) {
+            const newNote = {
+              beat: nearestBeat,
+              lane: 0,
+              size: 0,
+              type: 'BPMChange',
+              BPM: 160,
+            } as BPMChange
+
+            chartNotes.push(newNote)
+          }
+        } else if (selectedTool === 9) {
+          if (
+            chartNotes.filter(
+              (n) => n.type === 'TimeSignature' && n.beat === nearestBeat
+            ).length === 0
+          ) {
+            const newNote = {
+              beat: nearestBeat,
+              lane: 0,
+              size: 0,
+              type: 'TimeSignature',
+              top: 4,
+              bottom: 4,
+            } as TimeSignature
+
+            chartNotes.push(newNote)
+          }
+        } else if (selectedTool === 10) {
+          if (
+            chartNotes.filter(
+              (n) => n.type === 'HiSpeed' && n.beat === nearestBeat
+            ).length === 0
+          ) {
+            const newNote = {
+              beat: nearestBeat,
+              lane: 0,
+              size: 0,
+              type: 'HiSpeed',
+              speed: 1,
+            } as HiSpeed
+
+            chartNotes.push(newNote)
+          }
+        } else if (selectedTool === 2 || selectedTool === 7) {
           const newStartNote = {
             type: 'HoldStart',
             beat: nearestBeat,
@@ -780,7 +1216,7 @@ const draw = (
 
           const newEndNote = {
             type: 'HoldEnd',
-            beat: nearestBeat + tSigBottom / division,
+            beat: nearestBeat + getTsig(nearestBeat).bottom / division,
             lane: newLane,
             size: nextNoteOptions.size,
             isGold: false,
@@ -899,14 +1335,24 @@ const draw = (
       const maxBeat = getBeatFromMouse(mY)
 
       chartNotes
-        .filter(
-          (n) =>
+        .filter((n) => {
+          if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
+            const o =
+              width / 2 +
+              LANE_WIDTH * 6 +
+              getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
+            const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
+            const b = beatToY(n.beat)
+            return mX <= o && MX >= o + s.width && MY >= b && mY <= b - s.height
+          }
+
+          return (
             n.beat <= maxBeat &&
             n.beat >= minBeat &&
             n.lane - n.size / 2 <= maxLane &&
-            n.lane + n.size / 2 >= minLane &&
-            !['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)
-        )
+            n.lane + n.size / 2 >= minLane
+          )
+        })
         .forEach((n) => selectedIndeces.add(chartNotes.indexOf(n)))
 
       selectionStartX = null
@@ -926,10 +1372,12 @@ const draw = (
   if (isPlaying) {
     const pBeat = cursorPos
     cursorPos += (getBPM(cursorPos) * deltaTime) / 60000
-    yOffset = cursorPos * BEAT_HEIGHT * zoom - 250
+    // compute pixel offset for current beat accounting for time-signature bottoms
+    const pixels = getPixelsFromZero(cursorPos)
+    // keep cursor at a fixed vertical position (height - 250)
+    yOffset = pixels - 250
 
-    const time = getTime(cursorPos)
-    // const pTime = time - deltaTime
+    // const pTime = getTime(cursorPos) - deltaTime
 
     chartNotes
       .filter((n) => n.beat >= pBeat && n.beat < cursorPos)
@@ -1025,70 +1473,168 @@ const draw = (
   drawLanes()
 
   const drawDivisions = () => {
-    const zoomedBeatHeight = BEAT_HEIGHT * zoom * (4 / tSigBottom)
+    // Draw division lines by iterating subdivision indices per time-signature segment.
+    // This avoids floating-point accumulation by using integer subdivision indices (k).
 
-    const maxBigLinesOnScreen = Math.ceil(height / zoomedBeatHeight)
+    // visible beat range (bottom -> top)
+    const visibleMinBeat = getBeatFromMouse(height)
+    const visibleMaxBeat = getBeatFromMouse(0)
 
-    ctx.beginPath()
-    ctx.strokeStyle = '#bbbf'
-    ctx.fillStyle = '#bbbf'
-    ctx.lineWidth = 3
-    ctx.font = '32px Arial'
-    ctx.textAlign = 'right'
+    // use prebuilt `segments` (constructed above) which already contains
+    // contiguous time-signature segments starting at beat 0
 
-    for (let i = 0; i < maxBigLinesOnScreen; i++) {
-      const beatIndex =
-        i +
-        maxBigLinesOnScreen *
-          Math.floor(
-            (height - (-yOffset + i * zoomedBeatHeight)) /
-              (zoomedBeatHeight * maxBigLinesOnScreen)
+    // iterate segments that overlap visible range
+    for (const seg of segments) {
+      const segStart = Math.max(seg.start, visibleMinBeat)
+      const segEnd = Math.min(seg.end, visibleMaxBeat)
+      if (!(segStart <= segEnd)) continue
+
+      // subdivisions per quarter-beat (keep beat unit as quarter notes)
+      const subsPerBeat = division / 4
+
+      // integer subdivision indices that lie in this segment
+      const kStart = Math.ceil(segStart * subsPerBeat - 1e-9)
+      const kEnd = Math.floor(segEnd * subsPerBeat + 1e-9)
+
+      // measure width in subdivisions: division * top / bottom
+      const measureSubCount = Math.round((division * seg.top) / seg.bottom)
+
+      // offset in subdivision units where this segment starts (so kRelative resets to 0 at segment start)
+      const segOffsetK = Math.round(seg.start * subsPerBeat)
+
+      for (let k = kStart; k <= kEnd; k++) {
+        const beat = k / subsPerBeat
+        // round beat to avoid tiny FP noise when rendering/labeling
+        const beatRounded = Math.round((beat + Number.EPSILON) * 1e9) / 1e9
+        const y = beatToY(beatRounded)
+        if (y < -10 || y > height + 10) continue
+
+        ctx.beginPath()
+
+        const kRelative = k - segOffsetK
+        const isMeasureLine =
+          measureSubCount > 0 &&
+          kRelative >= 0 &&
+          kRelative % measureSubCount === 0
+
+        // determine whether this line falls exactly on a beat according to the time-signature bottom
+        // use kRelative (subdivision index relative to segment start) so beat lines reset per segment
+        // beatTimesFactor = kRelative * seg.bottom / division -> integer when on a beat
+        const beatTimesFactor = (kRelative * seg.bottom) / division
+        const isBeatLine =
+          kRelative >= 0 &&
+          Math.abs(Math.round(beatTimesFactor) - beatTimesFactor) < 1e-9
+
+        if (isMeasureLine) {
+          ctx.moveTo(width / 2 - 7 * LANE_WIDTH, y)
+          ctx.lineTo(width / 2 + 7 * LANE_WIDTH, y)
+          ctx.strokeStyle = 'rgba(220,220,220,0.95)'
+          ctx.lineWidth = 3
+          ctx.stroke()
+
+          ctx.fillStyle = ctx.strokeStyle
+          ctx.textBaseline = 'middle'
+          // measure number relative to segment start (1-based)
+          const measureIndex = Math.floor(kRelative / measureSubCount) + 1
+          // annotate first measure of a new time signature with the signature text
+
+          ctx.fillText(
+            measureIndex.toString(),
+            width / 2 - 7 * LANE_WIDTH - 30,
+            y
           )
-
-      const isMeasureLine = beatIndex % tSigTop === 0
-
-      const y =
-        (height - (-yOffset + i * zoomedBeatHeight)) %
-        (zoomedBeatHeight * maxBigLinesOnScreen)
-      ctx.moveTo(width / 2 - 6 * LANE_WIDTH, y)
-      ctx.lineTo(width / 2 + 6 * LANE_WIDTH, y)
-
-      if (isMeasureLine) {
-        const measureNum = beatIndex / tSigTop + 1
-        ctx.fillText(
-          measureNum.toString(),
-          width / 2 - 6 * LANE_WIDTH - 24,
-          y + 10
-        )
+        } else if (isBeatLine) {
+          // full beat lines are more visible than subdivisions
+          ctx.moveTo(width / 2 - 6 * LANE_WIDTH, y)
+          ctx.lineTo(width / 2 + 6 * LANE_WIDTH, y)
+          ctx.strokeStyle = 'rgba(221,221,221,0.75)'
+          ctx.lineWidth = 2
+          ctx.stroke()
+        } else {
+          // subdivisions should be faint
+          ctx.moveTo(width / 2 - 6 * LANE_WIDTH, y)
+          ctx.lineTo(width / 2 + 6 * LANE_WIDTH, y)
+          ctx.strokeStyle = 'rgba(119,119,119,0.67)'
+          ctx.lineWidth = 1
+          ctx.stroke()
+        }
       }
     }
-    ctx.stroke()
-
-    const littleLinesPerBigLine = division / tSigBottom
-
-    const zoomedDivisionHeight = zoomedBeatHeight / littleLinesPerBigLine
-
-    const maxLittleLinesOnScreen = Math.ceil(height / zoomedDivisionHeight)
-
-    ctx.beginPath()
-    for (let i = 0; i < maxLittleLinesOnScreen; i++) {
-      ctx.moveTo(
-        width / 2 - 6 * LANE_WIDTH,
-        (height - (-yOffset + i * zoomedDivisionHeight)) %
-          (zoomedDivisionHeight * maxLittleLinesOnScreen)
-      )
-      ctx.lineTo(
-        width / 2 + 6 * LANE_WIDTH,
-        (height - (-yOffset + i * zoomedDivisionHeight)) %
-          (zoomedDivisionHeight * maxLittleLinesOnScreen)
-      )
-    }
-    ctx.strokeStyle = '#8888'
-    ctx.lineWidth = 2
-    ctx.stroke()
   }
 
   drawDivisions()
+
+  const drawWaveform = () => {
+    if (!waveformReady || !waveform || waveform.length === 0) return
+
+    // visible beat range (bottom -> top)
+    const visibleMinBeat = getBeatFromMouse(height)
+    const visibleMaxBeat = getBeatFromMouse(0)
+
+    if (visibleMaxBeat <= visibleMinBeat) return
+
+    const leftEdge = width / 2 - 6 * LANE_WIDTH
+    const rightEdge = width / 2 + 6 * LANE_WIDTH
+    const centerX = (leftEdge + rightEdge) / 2
+    const maxHalfWidth = (rightEdge - leftEdge) / 2 - 6 // small padding
+
+    const leftPoints: { x: number; y: number }[] = []
+    const rightPoints: { x: number; y: number }[] = []
+
+    // sample every N pixels vertically to keep it fast
+    const step = Math.max(1, Math.floor(window.devicePixelRatio)) * 2
+
+    for (let y = 0; y <= height; y += step) {
+      const beat = getBeatFromMouse(y)
+
+      // map beat -> time in seconds using chart BPM map
+      const timeSec = getTime(beat)
+
+      // apply music offset (ms -> seconds)
+      const offsetSec = (musicOffsetMs ?? 0) / 1000
+      const adjustedTime = timeSec - offsetSec
+
+      const t = waveformDuration > 0 ? adjustedTime / waveformDuration : 0
+
+      let amp = 0
+      if (t >= 0 && t <= 1) {
+        const idx = Math.floor(t * (waveform.length - 1))
+        amp = waveform[idx] ?? 0
+      }
+
+      const halfW = amp * maxHalfWidth
+
+      leftPoints.push({ x: centerX - halfW, y })
+      rightPoints.push({ x: centerX + halfW, y })
+    }
+
+    // draw filled waveform (left side top->bottom, right side bottom->top)
+    ctx.beginPath()
+    // left side
+    for (let i = 0; i < leftPoints.length; i++) {
+      const p = leftPoints[i]
+      if (i === 0) ctx.moveTo(p.x, p.y)
+      else ctx.lineTo(p.x, p.y)
+    }
+
+    // right side (reverse)
+    for (let i = rightPoints.length - 1; i >= 0; i--) {
+      const p = rightPoints[i]
+      ctx.lineTo(p.x, p.y)
+    }
+
+    ctx.closePath()
+
+    // gradient fill to match guide style
+    // const grad = ctx.createLinearGradient(0, 0, 0, height)
+    // grad.addColorStop(0, guideColor + '66')
+    // grad.addColorStop(1, guideColor + '11')
+    // ctx.fillStyle = grad
+    ctx.fillStyle = '#bbb3'
+    ctx.fill()
+  }
+
+  drawWaveform()
 
   const cursorY = beatToY(cursorPos)
 
@@ -1158,44 +1704,35 @@ const draw = (
       const y = beatToY(beat)
       const lanesEdge = width / 2 + 6 * LANE_WIDTH
 
+      const startX = getEventOffset(note)
+
       ctx.beginPath()
       ctx.moveTo(lanesEdge, y)
-      ctx.lineTo(lanesEdge + 204, y)
+      ctx.lineTo(lanesEdge + startX + 4, y)
       ctx.strokeStyle = 'red'
       ctx.lineWidth = 4
+      if (selectedIndeces.has(chartNotes.indexOf(note)))
+        ctx.strokeStyle = '#ff4444'
       ctx.stroke()
 
       const fontSize = '24px'
       const fontFamily = 'arial'
 
-      const textEl = document.createElement('p')
-      textEl.style.fontSize = fontSize
-      textEl.style.fontFamily = fontFamily
-      textEl.style.display = 'inline'
-      textEl.innerText = `${note.speed}x`
-      document.body.appendChild(textEl)
-      const { width: textWidth, height: textHeight } =
-        textEl.getBoundingClientRect()
-      textEl.remove()
-      const padding = 8
+      const { width: eventWidth, height: eventHeight } = getEventSize(note)
 
       ctx.beginPath()
       // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
-      ctx.roundRect(
-        lanesEdge + 200,
-        y + 2,
-        textWidth + 2 * padding,
-        -(textHeight + 2 * padding),
-        4
-      )
+      ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
       ctx.fillStyle = 'red'
+      if (selectedIndeces.has(chartNotes.indexOf(note)))
+        ctx.fillStyle = '#ff4444'
       ctx.fill()
 
       ctx.fillStyle = 'black'
       ctx.font = `${fontSize} ${fontFamily}`
       ctx.textAlign = 'left'
       ctx.textBaseline = 'bottom'
-      ctx.fillText(`${note.speed}x`, lanesEdge + 200 + padding, y - padding)
+      ctx.fillText(`${note.speed}x`, lanesEdge + startX + 8, y - 8)
 
       return
     } else if (n.type === 'TimeSignature') {
@@ -1203,48 +1740,35 @@ const draw = (
       const y = beatToY(beat)
       const lanesEdge = width / 2 + 6 * LANE_WIDTH
 
+      const startX = getEventOffset(note)
+
       ctx.beginPath()
       ctx.moveTo(lanesEdge, y)
-      ctx.lineTo(lanesEdge + 124, y)
+      ctx.lineTo(lanesEdge + startX + 4, y)
       ctx.strokeStyle = 'yellow'
       ctx.lineWidth = 4
+      if (selectedIndeces.has(chartNotes.indexOf(note)))
+        ctx.strokeStyle = '#ffff99'
       ctx.stroke()
 
       const fontSize = '24px'
       const fontFamily = 'arial'
 
-      const textEl = document.createElement('p')
-      textEl.style.fontSize = fontSize
-      textEl.style.fontFamily = fontFamily
-      textEl.style.display = 'inline'
-      textEl.innerText = `${note.top}/${note.bottom}`
-      document.body.appendChild(textEl)
-      const { width: textWidth, height: textHeight } =
-        textEl.getBoundingClientRect()
-      textEl.remove()
-      const padding = 8
+      const { width: eventWidth, height: eventHeight } = getEventSize(note)
 
       ctx.beginPath()
       // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
-      ctx.roundRect(
-        lanesEdge + 120,
-        y + 2,
-        textWidth + 2 * padding,
-        -(textHeight + 2 * padding),
-        4
-      )
+      ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
       ctx.fillStyle = 'yellow'
+      if (selectedIndeces.has(chartNotes.indexOf(note)))
+        ctx.fillStyle = '#ffff99'
       ctx.fill()
 
       ctx.fillStyle = 'black'
       ctx.font = `${fontSize} ${fontFamily}`
       ctx.textAlign = 'left'
       ctx.textBaseline = 'bottom'
-      ctx.fillText(
-        `${note.top}/${note.bottom}`,
-        lanesEdge + 120 + padding,
-        y - padding
-      )
+      ctx.fillText(`${note.top}/${note.bottom}`, lanesEdge + startX + 8, y - 8)
 
       return
     } else if (n.type === 'BPMChange') {
@@ -1252,44 +1776,35 @@ const draw = (
       const y = beatToY(beat)
       const lanesEdge = width / 2 + 6 * LANE_WIDTH
 
+      const startX = getEventOffset(note)
+
       ctx.beginPath()
       ctx.moveTo(lanesEdge, y)
-      ctx.lineTo(lanesEdge + 44, y)
+      ctx.lineTo(lanesEdge + startX + 4, y)
       ctx.strokeStyle = 'lime'
       ctx.lineWidth = 4
+      if (selectedIndeces.has(chartNotes.indexOf(note)))
+        ctx.strokeStyle = '#99ff99'
       ctx.stroke()
 
       const fontSize = '24px'
       const fontFamily = 'arial'
 
-      const textEl = document.createElement('p')
-      textEl.style.fontSize = fontSize
-      textEl.style.fontFamily = fontFamily
-      textEl.style.display = 'inline'
-      textEl.innerText = note.BPM.toString()
-      document.body.appendChild(textEl)
-      const { width: textWidth, height: textHeight } =
-        textEl.getBoundingClientRect()
-      textEl.remove()
-      const padding = 8
+      const { width: eventWidth, height: eventHeight } = getEventSize(note)
 
       ctx.beginPath()
       // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
-      ctx.roundRect(
-        lanesEdge + 40,
-        y + 2,
-        textWidth + 2 * padding,
-        -(textHeight + 2 * padding),
-        4
-      )
+      ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
       ctx.fillStyle = 'lime'
+      if (selectedIndeces.has(chartNotes.indexOf(note)))
+        ctx.fillStyle = '#99ff99'
       ctx.fill()
 
       ctx.fillStyle = 'black'
       ctx.font = `${fontSize} ${fontFamily}`
       ctx.textAlign = 'left'
       ctx.textBaseline = 'bottom'
-      ctx.fillText(note.BPM.toString(), lanesEdge + 40 + padding, y - padding)
+      ctx.fillText(note.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
 
       return
     }
@@ -1505,6 +2020,8 @@ const draw = (
   }
 
   const drawSelectionOutline = (n: Note) => {
+    if (['HiSpeed', 'TimeSignature', 'BPMChange'].includes(n.type)) return
+
     const selectionOutlinePadding = 8
 
     const { lane, beat, size } = n
