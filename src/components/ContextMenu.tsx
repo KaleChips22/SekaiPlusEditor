@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { deleteSelected } from '../editor/draw'
+import { copy, cut, deleteSelected, flipSelection, paste } from '../editor/draw'
 
 const ContextMenu = () => {
   const [isHidden, setIsHidden] = useState(true)
@@ -27,23 +27,23 @@ const ContextMenu = () => {
     },
     {
       label: 'Cut',
-      action: () => {},
+      action: () => cut(),
     },
     {
       label: 'Copy',
-      action: () => {},
+      action: () => copy(),
     },
     {
       label: 'Paste',
-      action: () => {},
+      action: () => paste(),
     },
     {
       label: 'Flip Paste',
-      action: () => {},
+      action: () => paste(true),
     },
     {
       label: 'Flip',
-      action: () => {},
+      action: () => flipSelection(),
     },
     // {
     //   type: 'separator',
@@ -92,7 +92,7 @@ const ContextMenu = () => {
     <>
       <div
         className={twMerge(
-          'p-1 rounded-md bg-neutral-800 border-1 border-neutral-700 text-white z-9999 fixed text-sm min-w-40 flex flex-col items-center justify-center',
+          'p-1 rounded-md bg-neutral-800 border-1 border-neutral-700 text-white z-9999 fixed text-xs min-w-40 flex flex-col items-center justify-center',
           isHidden && 'hidden'
         )}
         style={{
@@ -100,16 +100,20 @@ const ContextMenu = () => {
           left: pos.x,
         }}
       >
-        {items.map((i) =>
+        {items.map((i, idx) =>
           i.type === 'separator' ? (
-            <div className='h-[1px] w-full m-1 bg-neutral-600' />
+            <div
+              className='h-[1px] w-full m-1 bg-neutral-600'
+              key={idx}
+            />
           ) : (
             <div
-              className='w-full p-1 rounded-sm hover:bg-neutral-700/50 text-xs text-neutral-300 hover:text-white'
+              className='w-full px-2 py-0.5 rounded-sm hover:bg-neutral-700/50 text-xs text-neutral-300 hover:text-white'
               onClick={() => {
                 i.action!()
                 setIsHidden(true)
               }}
+              key={idx}
             >
               {i.label}
             </div>

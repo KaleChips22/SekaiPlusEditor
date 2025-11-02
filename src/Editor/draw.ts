@@ -38,6 +38,9 @@ let selectionStartY: number | null = null
 let dragStartX: number | null = null
 let dragStartY: number | null = null
 
+const clipboard: Note[] = []
+let isPasting = false
+
 enum DragMode {
   Move,
   ScaleLeft,
@@ -492,6 +495,189 @@ export const getDefaultTimeSignature = () => {
   }
 
   return tSig
+}
+
+const flipNotes = (notes: Note[]) => notes.forEach((n) => (n.lane *= -1))
+
+export const flipSelection = () =>
+  selectedIndeces.forEach((i) => (chartNotes[i].lane *= -1))
+
+export const paste = (flip: boolean = false) => {
+  if (flip) flipNotes(clipboard)
+
+  isPasting = true
+}
+
+export const copy = () => {
+  clipboard.splice(0)
+
+  // Ensure full hold chains are included in the selection when copying.
+  // Previously only HoldStart/HoldEnd expanded; include HoldTick so selecting
+  // any part of a hold will copy the entire chain (start, ticks, end).
+  chartNotes.forEach((n, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    // If this note is any part of a hold chain, walk both directions and add
+    // all connected nodes to the selection set.
+    if (
+      n.type === 'HoldStart' ||
+      n.type === 'HoldTick' ||
+      n.type === 'HoldEnd'
+    ) {
+      let j = n as HoldStart | HoldTick | HoldEnd
+
+      // walk backwards to the HoldStart
+      while ('prevNode' in j && j.prevNode) {
+        const idx = chartNotes.indexOf(j.prevNode)
+        if (idx >= 0) selectedIndeces.add(idx)
+        j = j.prevNode
+      }
+
+      // reset to original and walk forwards to the HoldEnd
+      j = n as HoldStart | HoldTick | HoldEnd
+      while ('nextNode' in j && j.nextNode) {
+        const idx = chartNotes.indexOf(j.nextNode)
+        if (idx >= 0) selectedIndeces.add(idx)
+        j = j.nextNode
+      }
+    }
+  })
+
+  // Build an ordered list of selected notes (stable by chart order)
+  const selectedIndicesOrdered = Array.from(selectedIndeces).sort(
+    (a, b) => a - b
+  )
+  const selectedNotes = selectedIndicesOrdered.map((i) => chartNotes[i])
+
+  // Map original -> clone so we can re-link hold prev/next pointers
+  const map = new Map<Note, Note>()
+  const clones: Note[] = []
+
+  for (const n of selectedNotes) {
+    let c: Note
+
+    if (n.type === 'Tap') {
+      const t = n as TapNote
+      c = {
+        type: 'Tap',
+        beat: t.beat,
+        lane: t.lane,
+        size: t.size,
+        isGold: t.isGold,
+        isTrace: t.isTrace,
+        flickDir: t.flickDir,
+      } as TapNote
+    } else if (n.type === 'HoldStart') {
+      const h = n as HoldStart
+      c = {
+        type: 'HoldStart',
+        beat: h.beat,
+        lane: h.lane,
+        size: h.size,
+        isGold: h.isGold,
+        isTrace: h.isTrace,
+        isHidden: h.isHidden,
+        isGuide: h.isGuide,
+        easingType: h.easingType,
+        // placeholders; will rewire after all clones are created
+        nextNode: {} as HoldEnd,
+      } as HoldStart
+    } else if (n.type === 'HoldTick') {
+      const h = n as HoldTick
+      c = {
+        type: 'HoldTick',
+        beat: h.beat,
+        lane: h.lane,
+        size: h.size,
+        isGold: h.isGold,
+        isGuide: h.isGuide,
+        tickType: h.tickType,
+        easingType: h.easingType,
+        nextNode: {} as HoldEnd,
+        prevNode: {} as HoldStart,
+      } as HoldTick
+    } else if (n.type === 'HoldEnd') {
+      const h = n as HoldEnd
+      c = {
+        type: 'HoldEnd',
+        beat: h.beat,
+        lane: h.lane,
+        size: h.size,
+        isGold: h.isGold,
+        isTrace: h.isTrace,
+        isHidden: h.isHidden,
+        flickDir: h.flickDir,
+        prevNode: {} as HoldStart,
+      } as HoldEnd
+    } else if (n.type === 'BPMChange') {
+      const b = n as BPMChange
+      c = {
+        type: 'BPMChange',
+        beat: b.beat,
+        lane: 0,
+        size: 0,
+        BPM: b.BPM,
+      } as BPMChange
+    } else if (n.type === 'HiSpeed') {
+      const h = n as HiSpeed
+      c = {
+        type: 'HiSpeed',
+        beat: h.beat,
+        lane: 0,
+        size: 0,
+        speed: h.speed,
+      } as HiSpeed
+    } else if (n.type === 'TimeSignature') {
+      const t = n as TimeSignature
+      c = {
+        type: 'TimeSignature',
+        beat: t.beat,
+        lane: 0,
+        size: 0,
+        top: t.top,
+        bottom: t.bottom,
+      } as TimeSignature
+    } else {
+      // fallback shallow clone for unknown types
+      c = JSON.parse(JSON.stringify(n))
+    }
+
+    map.set(n, c)
+    clones.push(c)
+  }
+
+  // Re-link hold relationships to point to cloned nodes when applicable
+  for (let i = 0; i < selectedNotes.length; i++) {
+    const orig = selectedNotes[i]
+    const clone = map.get(orig)!
+
+    if ('nextNode' in (orig as any) && (orig as any).nextNode) {
+      const on = (orig as any).nextNode as Note
+      const cn = map.get(on)
+      if (cn) (clone as any).nextNode = cn
+      else delete (clone as any).nextNode
+    }
+
+    if ('prevNode' in (orig as any) && (orig as any).prevNode) {
+      const on = (orig as any).prevNode as Note
+      const cn = map.get(on)
+      if (cn) (clone as any).prevNode = cn
+      else delete (clone as any).prevNode
+    }
+  }
+
+  // Normalize beat positions so the earliest selected note starts at beat 0
+  const beats = clones.map((c) => c.beat ?? 0)
+  const minBeat = beats.length > 0 ? Math.min(...beats) : 0
+  clones.forEach((c) => (c.beat = (c.beat ?? 0) - minBeat))
+
+  // Replace clipboard contents with freshly cloned notes
+  clipboard.push(...clones)
+}
+
+export const cut = () => {
+  copy()
+  deleteSelected()
 }
 
 export let hiSpeedPanelShown = false
@@ -977,6 +1163,84 @@ const draw = (
     const beatClicked = getBeatFromMouse(mouseY)
     const nearestBeat = getNearestDivision(beatClicked)
     cursorPos = nearestBeat
+
+    // If we're in paste mode, commit the clipboard here where the user clicked.
+    if (isPasting) {
+      // Compute lane/beat offsets (same logic as preview) and create adjusted clones
+      const rawLaneOffset = getLaneFromMouse(mouseX!)
+
+      const groupLeft = Math.min(
+        ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2)
+      )
+      const groupRight = Math.max(
+        ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2)
+      )
+      const groupCenter = (groupLeft + groupRight) / 2
+      const desiredLaneOffset = rawLaneOffset - groupCenter
+
+      const allowedLows: number[] = []
+      const allowedHighs: number[] = []
+      for (const n of clipboard) {
+        const size = (n as any).size ?? 1
+        const minLane = -3 + size / 2
+        const maxLane = 3 - size / 2
+        allowedLows.push(minLane - (n.lane ?? 0))
+        allowedHighs.push(maxLane - (n.lane ?? 0))
+      }
+
+      const overallLow =
+        allowedLows.length > 0 ? Math.max(...allowedLows) : -Infinity
+      const overallHigh =
+        allowedHighs.length > 0 ? Math.min(...allowedHighs) : Infinity
+
+      let laneOffset = desiredLaneOffset
+      if (laneOffset < overallLow) laneOffset = overallLow
+      if (laneOffset > overallHigh) laneOffset = overallHigh
+
+      const minBeatInClipboard =
+        clipboard.length > 0
+          ? Math.min(...clipboard.map((n) => n.beat ?? 0))
+          : 0
+      const minBeatOffset = -minBeatInClipboard
+      const beatOffset = Math.max(minBeatOffset, nearestBeat)
+
+      const adjustedMap = new Map<Note, Note>()
+      const adjusted: Note[] = clipboard.map((n) => {
+        const copy: any = { ...(n as any) }
+        copy.beat = (n.beat ?? 0) + beatOffset
+        copy.lane = (n.lane ?? 0) + laneOffset
+        adjustedMap.set(n, copy)
+        return copy
+      })
+
+      for (let i = 0; i < clipboard.length; i++) {
+        const orig = clipboard[i] as any
+        const adj = adjusted[i] as any
+
+        if ('nextNode' in orig && orig.nextNode) {
+          const mapped = adjustedMap.get(orig.nextNode)
+          if (mapped) adj.nextNode = mapped
+          else delete adj.nextNode
+        }
+
+        if ('prevNode' in orig && orig.prevNode) {
+          const mapped = adjustedMap.get(orig.prevNode)
+          if (mapped) adj.prevNode = mapped
+          else delete adj.prevNode
+        }
+      }
+
+      // Insert adjusted notes into chartNotes and select them
+      const startIndex = chartNotes.length
+      chartNotes.push(...adjusted)
+      selectedIndeces.clear()
+      for (let i = 0; i < adjusted.length; i++)
+        selectedIndeces.add(startIndex + i)
+
+      isPasting = false
+
+      break mouseDown
+    }
 
     const notesAtPos = chartNotes.filter((n) => {
       const clickedLane = getLaneFromMouse(mouseX!)
@@ -2167,7 +2431,7 @@ const draw = (
   }
 
   if (mouseX !== null && mouseY !== null) {
-    if ([1, 2, 3, 4, 5, 6, 7].includes(selectedTool)) {
+    if ([1, 2, 3, 4, 5, 6, 7].includes(selectedTool) || isPasting) {
       const nearestBeat = getNearestDivision(getBeatFromMouse(mouseY))
       const newLane = Math.min(
         3 - nextNoteOptions.size / 2,
@@ -2181,49 +2445,137 @@ const draw = (
             (nextNoteOptions.size % 1 === 0 ? 0 : 0.25)
         )
       )
-      let newNote: Note
 
-      if (selectedTool === 2 || selectedTool === 7)
-        newNote = {
-          type: 'HoldStart',
-          beat: nearestBeat,
-          lane: newLane,
-          size: nextNoteOptions.size,
-          isGold: false,
-          isTrace: false,
-          easingType: EasingType.Linear,
-          isHidden: selectedTool === 7,
-          isGuide: selectedTool === 7,
-          nextNode: {} as HoldEnd,
-        } as HoldStart
-      else if (selectedTool === 3)
-        newNote = {
-          type: 'HoldTick',
-          beat: nearestBeat,
-          lane: newLane,
-          size: nextNoteOptions.size,
-          isGold: false,
-          tickType: nextNoteOptions.tickType,
-          easingType: EasingType.Linear,
-          nextNode: {} as HoldEnd,
-          prevNode: {} as HoldStart,
-        } as HoldTick
-      else
-        newNote = {
-          type: 'Tap',
-          beat: nearestBeat,
-          lane: newLane,
-          size: nextNoteOptions.size,
-          isGold: selectedTool === 5,
-          isTrace: selectedTool === 6,
-          flickDir:
-            selectedTool === 4 ? nextNoteOptions.flickDir : FlickDirection.None,
-        } as TapNote
+      if (isPasting) {
+        // Compute a group-level lane offset that keeps the entire clipboard
+        // selection inside the lane bounds so relative spacing is preserved.
+        // rawLaneOffset is the lane under the mouse cursor
+        const rawLaneOffset = getLaneFromMouse(mouseX!)
 
-      ctx.globalAlpha = 0.5
-      drawNote(newNote)
-      if (selectedTool === 4) drawFlickArrow(newNote)
-      ctx.globalAlpha = 1
+        // compute group's current horizontal center (in lane units) so we can
+        // position the group such that the mouse sits at the group's center
+        const groupLeft = Math.min(
+          ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2)
+        )
+        const groupRight = Math.max(
+          ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2)
+        )
+        const groupCenter = (groupLeft + groupRight) / 2
+        const desiredLaneOffset = rawLaneOffset - groupCenter
+
+        // For each note determine allowed laneOffset range so the note stays within -3..3
+        const allowedLows: number[] = []
+        const allowedHighs: number[] = []
+        for (const n of clipboard) {
+          const size = (n as any).size ?? 1
+          const minLane = -3 + size / 2
+          const maxLane = 3 - size / 2
+          allowedLows.push(minLane - (n.lane ?? 0))
+          allowedHighs.push(maxLane - (n.lane ?? 0))
+        }
+
+        // intersect ranges to get overall allowed lane offset range
+        const overallLow =
+          allowedLows.length > 0 ? Math.max(...allowedLows) : -Infinity
+        const overallHigh =
+          allowedHighs.length > 0 ? Math.min(...allowedHighs) : Infinity
+
+        // clamp the requested lane offset into the allowed range, using the
+        // desiredLaneOffset so the mouse corresponds to the group's center
+        let laneOffset = desiredLaneOffset
+        if (laneOffset < overallLow) laneOffset = overallLow
+        if (laneOffset > overallHigh) laneOffset = overallHigh
+
+        // Also clamp vertical (beat) offset so earliest note doesn't go negative
+        const minBeatInClipboard =
+          clipboard.length > 0
+            ? Math.min(...clipboard.map((n) => n.beat ?? 0))
+            : 0
+        const minBeatOffset = -minBeatInClipboard
+        const beatOffset = Math.max(minBeatOffset, nearestBeat)
+
+        // Build adjusted clones and map originals -> adjusted clones for pointer rewiring
+        const adjustedMap = new Map<Note, Note>()
+        const adjusted: Note[] = clipboard.map((n) => {
+          const copy: any = { ...(n as any) }
+          copy.beat = (n.beat ?? 0) + beatOffset
+          copy.lane = (n.lane ?? 0) + laneOffset
+          adjustedMap.set(n, copy)
+          return copy
+        })
+
+        // rewire nextNode/prevNode pointers to point to adjusted clones when present
+        for (let i = 0; i < clipboard.length; i++) {
+          const orig = clipboard[i] as any
+          const adj = adjusted[i] as any
+
+          if ('nextNode' in orig && orig.nextNode) {
+            const mapped = adjustedMap.get(orig.nextNode)
+            if (mapped) adj.nextNode = mapped
+            else delete adj.nextNode
+          }
+
+          if ('prevNode' in orig && orig.prevNode) {
+            const mapped = adjustedMap.get(orig.prevNode)
+            if (mapped) adj.prevNode = mapped
+            else delete adj.prevNode
+          }
+        }
+
+        ctx.globalAlpha = 0.5
+        adjusted.forEach((newNote) => {
+          if (newNote.type === 'HoldStart' || newNote.type === 'HoldTick')
+            drawHoldLine(newNote)
+          drawNote(newNote)
+        })
+        ctx.globalAlpha = 1
+      } else {
+        let newNote: Note
+
+        if (selectedTool === 2 || selectedTool === 7)
+          newNote = {
+            type: 'HoldStart',
+            beat: nearestBeat,
+            lane: newLane,
+            size: nextNoteOptions.size,
+            isGold: false,
+            isTrace: false,
+            easingType: EasingType.Linear,
+            isHidden: selectedTool === 7,
+            isGuide: selectedTool === 7,
+            nextNode: {} as HoldEnd,
+          } as HoldStart
+        else if (selectedTool === 3)
+          newNote = {
+            type: 'HoldTick',
+            beat: nearestBeat,
+            lane: newLane,
+            size: nextNoteOptions.size,
+            isGold: false,
+            tickType: nextNoteOptions.tickType,
+            easingType: EasingType.Linear,
+            nextNode: {} as HoldEnd,
+            prevNode: {} as HoldStart,
+          } as HoldTick
+        else
+          newNote = {
+            type: 'Tap',
+            beat: nearestBeat,
+            lane: newLane,
+            size: nextNoteOptions.size,
+            isGold: selectedTool === 5,
+            isTrace: selectedTool === 6,
+            flickDir:
+              selectedTool === 4
+                ? nextNoteOptions.flickDir
+                : FlickDirection.None,
+          } as TapNote
+
+        ctx.globalAlpha = 0.5
+        drawNote(newNote)
+        if (selectedTool === 4) drawFlickArrow(newNote)
+        ctx.globalAlpha = 1
+      }
     }
   }
 
