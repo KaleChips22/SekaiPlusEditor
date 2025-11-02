@@ -22,8 +22,8 @@ These are my to-dos, in order of priority
 - [x] Preview Playing with audio
 - [x] Properly display Time Signature
 - [x] Editing BPM, Time Signature, Hi Speed
-- [ ] Copy/Paste/Cut
-- [ ] Flip/Flip Paste
+- [x] Copy/Paste/Cut
+- [x] Flip/Flip Paste
 - [ ] Exporting and Importing
 - [ ] Options Panel
 - [ ] Note Properties Panel
