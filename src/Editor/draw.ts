@@ -1,4 +1,5 @@
 import { globalState } from '../lib'
+import { saveFile, saveFileAs } from './fileOps'
 import {
   BPMChange,
   EasingType,
@@ -13,6 +14,8 @@ import {
   type Note,
 } from './note'
 import { getRect } from './noteImage'
+import { notesToPJSK } from './PJSK'
+import { notesToUSC } from './USC'
 
 const LANE_WIDTH = 55
 const BEAT_HEIGHT = LANE_WIDTH * 4
@@ -54,6 +57,9 @@ export let nextNoteOptions = {
   tickType: TickType.Normal,
   flickDir: FlickDirection.Default,
 }
+
+let musicScoreName = ''
+export const setMusicScoreName = (name: string) => (musicScoreName = name)
 
 const musicPlayer = new Audio()
 let currentMusicUrl: string | null = null
@@ -329,6 +335,43 @@ const chartNotes: Note[] = [
   } as TapNote,
    */
 ]
+
+export const setChartNotes = (notes: Note[]) => {
+  chartNotes.splice(0)
+
+  notes.forEach((n) => chartNotes.push(n))
+}
+
+export const exportUSC = () => {
+  const usc = notesToUSC(chartNotes, musicOffsetMs)
+
+  // console.log(usc)
+
+  const blob = new Blob([JSON.stringify(usc)], { type: 'application/json' })
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = (musicScoreName || 'Untitled') + '.usc'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export const saveAsPJSK = () => {
+  const pjsk = notesToPJSK(chartNotes, musicOffsetMs)
+  const pjskString = JSON.stringify(pjsk)
+
+  saveFileAs(pjskString)
+}
+
+export const savePJSK = () => {
+  const pjsk = notesToPJSK(chartNotes, musicOffsetMs)
+  const pjskString = JSON.stringify(pjsk)
+
+  saveFile(pjskString)
+}
 
 // const holdStart = {
 //   type: 'HoldStart',
@@ -1336,11 +1379,14 @@ const draw = (
             if (note.type !== 'HoldStart' && note.type !== 'HoldTick') return
 
             if (note.easingType === EasingType.Linear)
-              note.easingType = EasingType.EaseOut
-            else if (note.easingType === EasingType.EaseOut)
               note.easingType = EasingType.EaseIn
             else if (note.easingType === EasingType.EaseIn)
-              note.easingType = EasingType.Linear
+              note.easingType = EasingType.EaseOut
+            else if (note.easingType === EasingType.EaseOut)
+              note.easingType = EasingType.EaseInOut
+            else if (note.easingType === EasingType.EaseInOut)
+              note.easingType = EasingType.EaseOutIn
+            else note.easingType = EasingType.Linear
           } else if (selectedTool === 3) {
             let note = chartNotes[i] as HoldTick
             if (note.type !== 'HoldTick') return
@@ -1646,8 +1692,10 @@ const draw = (
     chartNotes
       .filter((n) => n.beat >= pBeat && n.beat < cursorPos)
       .forEach((n) => {
-        if (['Tap', 'HoldStart', 'HoldEnd'].includes(n.type)) {
+        if (['Tap', 'HoldStart', 'HoldEnd', 'HoldTick'].includes(n.type)) {
           if (n.type === 'HoldStart') {
+            if ((n as HoldStart).isGuide) return
+
             if ((n as HoldStart).isGold) {
               if (goldHoldsPlaying === 0) {
                 playLongGold()
@@ -1665,6 +1713,8 @@ const draw = (
             if ((n as HoldStart).isHidden) return
           }
           if (n.type === 'HoldEnd') {
+            if ((n as HoldEnd).prevNode.isGuide) return
+
             if ((n as HoldEnd).prevNode.isGold) {
               goldHoldsPlaying--
 
@@ -1683,7 +1733,14 @@ const draw = (
           }
           const note = n as TapNote
           let p: HTMLAudioElement
-          if (note.flickDir !== FlickDirection.None && n.type !== 'HoldStart') {
+          if (n.type === 'HoldTick') {
+            if ((n as HoldTick).tickType !== TickType.Hidden)
+              p = note.isGold ? noteFxPlayers.critTick : noteFxPlayers.tick
+            else return
+          } else if (
+            n.type !== 'HoldStart' &&
+            note.flickDir !== FlickDirection.None
+          ) {
             p = note.isGold ? noteFxPlayers.critFlick : noteFxPlayers.flick
           } else if (note.isTrace) {
             p = note.isGold ? noteFxPlayers.critTrace : noteFxPlayers.trace
@@ -2330,21 +2387,75 @@ const draw = (
     ctx.beginPath()
     ctx.moveTo(startX, startY)
     ctx.lineTo(startX + startW, startY)
-    if (note.easingType === EasingType.Linear) ctx.lineTo(endX + endW, endY)
-    else if (note.easingType === EasingType.EaseOut)
-      ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
-    else
+    if (note.easingType === EasingType.EaseIn)
       ctx.quadraticCurveTo(
         startX + startW,
         (startY + endY) / 2,
         endX + endW,
         endY
       )
+    else if (note.easingType === EasingType.EaseOut)
+      ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
+    else if (note.easingType === EasingType.EaseInOut) {
+      ctx.quadraticCurveTo(
+        startX + startW,
+        (startY + (startY + endY) / 2) / 2,
+        (startX + endX) / 2 + (startW + endW) / 2,
+        (startY + endY) / 2
+      )
+      ctx.quadraticCurveTo(
+        endX + endW,
+        ((startY + endY) / 2 + endY) / 2,
+        endX + endW,
+        endY
+      )
+    } else if (note.easingType === EasingType.EaseOutIn) {
+      ctx.quadraticCurveTo(
+        (startX + endX) / 2 + (startW + endW) / 2,
+        (startY + (startY + endY) / 2) / 2,
+        (startX + endX) / 2 + (startW + endW) / 2,
+        (startY + endY) / 2
+      )
+      ctx.quadraticCurveTo(
+        (startX + endX) / 2 + (startW + endW) / 2,
+        ((startY + endY) / 2 + endY) / 2,
+        endX + endW,
+        endY
+      )
+    } else ctx.lineTo(endX + endW, endY)
+
     ctx.lineTo(endX, endY)
-    if (note.easingType === EasingType.Linear) ctx.lineTo(startX, startY)
+    if (note.easingType === EasingType.EaseIn)
+      ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
     else if (note.easingType === EasingType.EaseOut)
       ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
-    else ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
+    else if (note.easingType === EasingType.EaseInOut) {
+      ctx.quadraticCurveTo(
+        endX,
+        ((startY + endY) / 2 + endY) / 2,
+        (startX + endX) / 2,
+        (startY + endY) / 2
+      )
+      ctx.quadraticCurveTo(
+        startX,
+        (startY + (endY + startY) / 2) / 2,
+        startX,
+        startY
+      )
+    } else if (note.easingType === EasingType.EaseOutIn) {
+      ctx.quadraticCurveTo(
+        (startX + endX) / 2,
+        ((startY + endY) / 2 + endY) / 2,
+        (startX + endX) / 2,
+        (startY + endY) / 2
+      )
+      ctx.quadraticCurveTo(
+        (endX + startX) / 2,
+        (startY + (endY + startY) / 2) / 2,
+        startX,
+        startY
+      )
+    } else ctx.lineTo(startX, startY)
 
     if (note.isGuide) {
       let pN = note as HoldStart | HoldTick | HoldEnd

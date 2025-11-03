@@ -2,10 +2,14 @@ import {
   copy,
   cut,
   deleteSelected,
+  exportUSC,
   flipSelection,
   paste,
+  saveAsPJSK,
+  savePJSK,
   selectAll,
 } from '../editor/draw'
+import { newFile, openFile } from '../editor/fileOps'
 
 const runCommand = (command: string) => {
   switch (command) {
@@ -35,6 +39,26 @@ const runCommand = (command: string) => {
 
     case 'flipPaste':
       paste(true)
+      break
+
+    case 'open':
+      openFile()
+      break
+
+    case 'export':
+      exportUSC()
+      break
+
+    case 'saveAs':
+      saveAsPJSK()
+      break
+
+    case 'save':
+      savePJSK()
+      break
+
+    case 'newFile':
+      newFile()
       break
 
     default:

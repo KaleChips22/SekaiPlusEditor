@@ -83,7 +83,8 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
     return () => {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
-      window.ipcRenderer.off('resize', ipcListenerHandler)
+      // window.ipcRenderer.off('resize', ipcListenerHandler)
+      window.ipcRenderer.removeAllListeners('resize')
       ro.disconnect()
     }
   }, [])

@@ -1,8 +1,9 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { menuData, titleBarHeight, trafficLightsSize } from '../shared'
+import fs from 'fs/promises'
 
 // const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -148,3 +149,53 @@ app.whenReady().then(() => {
 })
 
 app.setName('Sekai Plus Editor')
+
+ipcMain.handle('show-open-dialog', async () => {
+  const result = await dialog.showOpenDialog(win!, {
+    properties: ['openFile'],
+    filters: [{ name: 'Sekai Plus Editor Files', extensions: ['pjsk', 'usc'] }],
+  })
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    const filePath = result.filePaths[0]
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      return { filePath, content }
+    } catch (error) {
+      console.error('Failed to read file:', error)
+      dialog.showErrorBox('Error', 'Could not read file.')
+      return null
+    }
+  }
+  return null
+})
+
+ipcMain.handle('show-save-dialog', async (_, defaultPath, content) => {
+  const result = await dialog.showSaveDialog(win!, {
+    defaultPath: defaultPath || 'Untitled.pjsk',
+    filters: [{ name: 'Sekai Plus Editor Files', extensions: ['pjsk', 'usc'] }],
+  })
+
+  if (!result.canceled && result.filePath) {
+    try {
+      await fs.writeFile(result.filePath, content, 'utf-8')
+      return result.filePath
+    } catch (error) {
+      console.error('Failed to save file:', error)
+      dialog.showErrorBox('Error', 'Could not save file.')
+      return null
+    }
+  }
+  return null
+})
+
+ipcMain.handle('save-file', async (_, filePath, content) => {
+  try {
+    await fs.writeFile(filePath, content, 'utf-8')
+    return filePath
+  } catch (error) {
+    console.error('Failed to save file directly:', error)
+    dialog.showErrorBox('Error', 'Could not save file.')
+    return null
+  }
+})
