@@ -24,7 +24,12 @@ These are my to-dos, in order of priority
 - [x] Editing BPM, Time Signature, Hi Speed
 - [x] Copy/Paste/Cut
 - [x] Flip/Flip Paste
-- [ ] Exporting and Importing
+- [x] Exporting and Importing
+- [x] Save to file (_.pjsk_ file)
+- [ ] Settings Panel
+  - [ ] Editor Options
+  - [ ] Visual Options
+- [ ] Undo and redo
 - [ ] Options Panel
 - [ ] Note Properties Panel
 - [ ] Preview Mode

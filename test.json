@@ -1,0 +1,679 @@
+{
+  "usc": {
+    "objects": [
+      { "beat": 0.0, "bpm": 160.0, "type": "bpm" },
+      { "beat": 0.25, "bpm": 120.0, "type": "bpm" },
+      { "beat": 1.0, "bpm": 180.0, "type": "bpm" },
+      {
+        "changes": [
+          { "beat": 11.5, "timeScale": 0.5 },
+          { "beat": 0.0, "timeScale": 1.0 },
+          { "beat": 10.75, "timeScale": 2.0 },
+          { "beat": 13.25, "timeScale": 1.0 }
+        ],
+        "type": "timeScaleGroup"
+      },
+      {
+        "beat": 1.5,
+        "critical": true,
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 2.5,
+        "critical": true,
+        "direction": "up",
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 1.0,
+        "critical": false,
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 1.5,
+        "critical": true,
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 2.5,
+        "critical": true,
+        "direction": "up",
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 2.0,
+        "critical": false,
+        "direction": "up",
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 1.0,
+        "critical": false,
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 4.5,
+        "critical": true,
+        "direction": "right",
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 2.0,
+        "critical": false,
+        "direction": "up",
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 3.5,
+        "critical": true,
+        "direction": "left",
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 3.5,
+        "critical": true,
+        "direction": "left",
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 3.0,
+        "critical": false,
+        "direction": "left",
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 3.0,
+        "critical": false,
+        "direction": "left",
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 4.5,
+        "critical": true,
+        "direction": "right",
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 4.0,
+        "critical": false,
+        "direction": "right",
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": false,
+        "type": "single"
+      },
+      {
+        "beat": 4.0,
+        "critical": false,
+        "direction": "right",
+        "lane": 1.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "trace": true,
+        "type": "single"
+      },
+      {
+        "beat": 9.0,
+        "lane": -4.5,
+        "size": 1.5,
+        "timeScaleGroup": 0,
+        "type": "damage"
+      },
+      {
+        "connections": [
+          {
+            "beat": 1.0,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "normal",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 1.5,
+            "critical": false,
+            "judgeType": "normal",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 1.0,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "trace",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 1.5,
+            "critical": false,
+            "judgeType": "trace",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "color": "yellow",
+        "fade": "out",
+        "midpoints": [
+          {
+            "beat": 4.0,
+            "ease": "linear",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          },
+          {
+            "beat": 4.5,
+            "ease": "linear",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          }
+        ],
+        "type": "guide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 2.0,
+            "critical": true,
+            "ease": "linear",
+            "judgeType": "normal",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 2.5,
+            "critical": true,
+            "judgeType": "normal",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": true,
+        "type": "slide"
+      },
+      {
+        "color": "green",
+        "fade": "out",
+        "midpoints": [
+          {
+            "beat": 3.0,
+            "ease": "linear",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          },
+          {
+            "beat": 3.5,
+            "ease": "linear",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          }
+        ],
+        "type": "guide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 2.0,
+            "critical": true,
+            "ease": "linear",
+            "judgeType": "trace",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 2.5,
+            "critical": true,
+            "judgeType": "trace",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": true,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 3.0,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "none",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 3.5,
+            "critical": false,
+            "judgeType": "none",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 4.0,
+            "critical": true,
+            "ease": "linear",
+            "judgeType": "none",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 4.5,
+            "critical": true,
+            "judgeType": "none",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": true,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 5.0,
+            "critical": false,
+            "ease": "out",
+            "judgeType": "normal",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 6.0,
+            "critical": false,
+            "judgeType": "normal",
+            "lane": -0.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 5.0,
+            "critical": true,
+            "ease": "in",
+            "judgeType": "normal",
+            "lane": 0.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 6.0,
+            "critical": true,
+            "judgeType": "normal",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": true,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 6.5,
+            "critical": true,
+            "ease": "inout",
+            "judgeType": "normal",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 7.5,
+            "critical": true,
+            "judgeType": "normal",
+            "lane": -0.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": true,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 6.5,
+            "critical": false,
+            "ease": "outin",
+            "judgeType": "normal",
+            "lane": 0.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 7.5,
+            "critical": false,
+            "judgeType": "normal",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "color": "green",
+        "fade": "out",
+        "midpoints": [
+          {
+            "beat": 10.75,
+            "ease": "linear",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          },
+          {
+            "beat": 11.25,
+            "ease": "in",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          },
+          {
+            "beat": 11.75,
+            "ease": "out",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          },
+          {
+            "beat": 12.25,
+            "ease": "inout",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          },
+          {
+            "beat": 12.75,
+            "ease": "outin",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          },
+          {
+            "beat": 13.25,
+            "ease": "linear",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0
+          }
+        ],
+        "type": "guide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 8.0,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "normal",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 8.25,
+            "critical": false,
+            "ease": "linear",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "tick"
+          },
+          {
+            "beat": 8.5,
+            "ease": "linear",
+            "lane": 3.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "tick"
+          },
+          {
+            "beat": 8.75,
+            "critical": false,
+            "ease": "linear",
+            "lane": -0.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "attach"
+          },
+          {
+            "beat": 9.0,
+            "critical": false,
+            "judgeType": "normal",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 9.5,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "normal",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 10.0,
+            "critical": false,
+            "direction": "up",
+            "judgeType": "normal",
+            "lane": -4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 9.5,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "normal",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 10.0,
+            "critical": true,
+            "direction": "up",
+            "judgeType": "normal",
+            "lane": -1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 9.5,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "normal",
+            "lane": 1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 10.0,
+            "critical": false,
+            "direction": "up",
+            "judgeType": "trace",
+            "lane": 1.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      },
+      {
+        "connections": [
+          {
+            "beat": 9.5,
+            "critical": false,
+            "ease": "linear",
+            "judgeType": "normal",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "start"
+          },
+          {
+            "beat": 10.0,
+            "critical": true,
+            "direction": "up",
+            "judgeType": "trace",
+            "lane": 4.5,
+            "size": 1.5,
+            "timeScaleGroup": 0,
+            "type": "end"
+          }
+        ],
+        "critical": false,
+        "type": "slide"
+      }
+    ],
+    "offset": -0.0
+  },
+  "version": 2
+}

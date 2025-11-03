@@ -9,12 +9,12 @@ export const menuData = [
   {
     label: 'File',
     submenu: [
-      { label: 'New File', accelerator: 'CmdOrCtrl+N' },
-      { label: 'Open File', accelerator: 'CmdOrCtrl+O' },
+      { label: 'New File', accelerator: 'CmdOrCtrl+N', action: 'newFile' },
+      { label: 'Open File', accelerator: 'CmdOrCtrl+O', action: 'open' },
       { type: 'separator' },
-      { label: 'Save', accelerator: 'CmdOrCtrl+S' },
-      { label: 'Save As', accelerator: 'CmdOrCtrl+Shift+S' },
-      { label: 'Export', accelerator: 'CmdOrCtrl+E' },
+      { label: 'Save', accelerator: 'CmdOrCtrl+S', action: 'save' },
+      { label: 'Save As', accelerator: 'CmdOrCtrl+Shift+S', action: 'saveAs' },
+      { label: 'Export', accelerator: 'CmdOrCtrl+E', action: 'export' },
       { type: 'separator' },
       { role: 'quit' },
       { role: 'toggleDevTools' },

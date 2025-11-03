@@ -11,8 +11,16 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { nextNoteOptions } from '../editor/draw'
+import {
+  copy,
+  cut,
+  exportUSC,
+  nextNoteOptions,
+  paste,
+  savePJSK,
+} from '../editor/draw'
 import { FlickDirection, TickType } from '../editor/note'
+import { newFile, openFile } from '../editor/fileOps'
 
 const ToolBar = ({
   selectedTool,
@@ -27,14 +35,14 @@ const ToolBar = ({
   const [flickIconNum, setFlickIconNum] = useState(0)
 
   const tools = [
-    { label: 'new', icon: <FilePlus2 />, action: () => {} },
-    { label: 'open', icon: <FolderOpen />, action: () => {} },
-    { label: 'save', icon: <Save />, action: () => {} },
-    { label: 'export', icon: <FileOutput />, action: () => {} },
+    { label: 'new', icon: <FilePlus2 />, action: () => newFile() },
+    { label: 'open', icon: <FolderOpen />, action: () => openFile() },
+    { label: 'save', icon: <Save />, action: () => savePJSK() },
+    { label: 'export', icon: <FileOutput />, action: () => exportUSC() },
     { type: 'separator' },
-    { label: 'cut', icon: <Scissors />, action: () => {} },
-    { label: 'copy', icon: <Copy />, action: () => {} },
-    { label: 'paste', icon: <Clipboard />, action: () => {} },
+    { label: 'cut', icon: <Scissors />, action: () => cut() },
+    { label: 'copy', icon: <Copy />, action: () => copy() },
+    { label: 'paste', icon: <Clipboard />, action: () => paste() },
     { type: 'separator' },
     { label: 'undo', icon: <Undo2 />, action: () => {} },
     { label: 'redo', icon: <Redo2 />, action: () => {} },

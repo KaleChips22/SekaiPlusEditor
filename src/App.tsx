@@ -48,8 +48,10 @@ const App = () => {
     window.ipcRenderer.on('command', commandHandler)
 
     return () => {
-      window.ipcRenderer.off('main-process-message', mainHandler)
-      window.ipcRenderer.off('command', commandHandler)
+      // window.ipcRenderer.off('main-process-message', mainHandler)
+      window.ipcRenderer.removeAllListeners('main-process-message')
+      // window.ipcRenderer.off('command', commandHandler)
+      window.ipcRenderer.removeAllListeners('command')
     }
   }, [])
 

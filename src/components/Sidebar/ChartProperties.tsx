@@ -1,15 +1,15 @@
 import { Triangle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { setMusic, setMusicOffset } from '../../editor/draw'
+import { setMusic, setMusicOffset, setMusicScoreName } from '../../editor/draw'
 
 const ChartProperties = () => {
   const [formData, setFormData] = useState({
     title: '',
     designer: '',
     artist: '',
-    jacket: null as string | null,
-    musicFile: null as string | null,
+    jacket: '',
+    musicFile: '',
     musicOffset: 0,
     masterVolume: 100,
     BGMVolume: 100,
@@ -56,9 +56,10 @@ const ChartProperties = () => {
         <input
           className='bg-neutral-800/50 outline-none ring-0'
           value={formData.title}
-          onChange={(e) =>
+          onChange={(e) => {
             setFormData({ ...formData, title: e.currentTarget.value })
-          }
+            setMusicScoreName(e.currentTarget.value)
+          }}
         />
         <span>Designer</span>
         <input

@@ -18,7 +18,19 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     const [channel, ...omit] = args
     return ipcRenderer.invoke(channel, ...omit)
   },
+  removeAllListeners(
+    ...args: Parameters<typeof ipcRenderer.removeAllListeners>
+  ) {
+    const [channel, ...omit] = args
+    return ipcRenderer.removeAllListeners(channel, ...omit)
+  },
 
   // You can expose other APTs you need here.
   // ...
+
+  openFile: () => ipcRenderer.invoke('show-open-dialog'),
+  saveFileAs: (defaultPath: string, content: string) =>
+    ipcRenderer.invoke('show-save-dialog', defaultPath, content),
+  saveFile: (filePath: string, content: string) =>
+    ipcRenderer.invoke('save-file', filePath, content),
 })

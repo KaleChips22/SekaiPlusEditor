@@ -17,6 +17,8 @@ export enum EasingType {
   Linear,
   EaseIn,
   EaseOut,
+  EaseInOut,
+  EaseOutIn,
 }
 
 export enum TickType {
