@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
-// import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { menuData, titleBarHeight, trafficLightsSize } from '../shared'
 import fs from 'fs/promises'
+import { updateElectronApp } from 'update-electron-app'
 
-// const require = createRequire(import.meta.url)
+updateElectronApp()
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure

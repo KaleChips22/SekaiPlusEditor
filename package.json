@@ -5,8 +5,12 @@
   "author": "Kale",
   "icon": "./public/icon/icon_512.png",
   "private": true,
-  "version": "0.0.1-preview-08",
+  "version": "0.0.1-preview-08.1",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KaleChips22/SekaiPlusEditor.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
@@ -20,7 +24,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss": "^4.1.14"
+    "tailwindcss": "^4.1.14",
+    "update-electron-app": "^3.1.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.64",
