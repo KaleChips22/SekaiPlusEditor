@@ -29,6 +29,7 @@ These are my to-dos, in order of priority
 - [ ] Settings Panel
   - [ ] Editor Options
   - [ ] Visual Options
+- [ ] Undo and redo
 - [ ] Options Panel
 - [ ] Note Properties Panel
 - [ ] Preview Mode

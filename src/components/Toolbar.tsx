@@ -11,9 +11,16 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { copy, cut, exportUSC, nextNoteOptions, paste } from '../editor/draw'
+import {
+  copy,
+  cut,
+  exportUSC,
+  nextNoteOptions,
+  paste,
+  savePJSK,
+} from '../editor/draw'
 import { FlickDirection, TickType } from '../editor/note'
-import { openFile } from '../editor/fileOps'
+import { newFile, openFile } from '../editor/fileOps'
 
 const ToolBar = ({
   selectedTool,
@@ -28,9 +35,9 @@ const ToolBar = ({
   const [flickIconNum, setFlickIconNum] = useState(0)
 
   const tools = [
-    { label: 'new', icon: <FilePlus2 />, action: () => {} },
+    { label: 'new', icon: <FilePlus2 />, action: () => newFile() },
     { label: 'open', icon: <FolderOpen />, action: () => openFile() },
-    { label: 'save', icon: <Save />, action: () => {} },
+    { label: 'save', icon: <Save />, action: () => savePJSK() },
     { label: 'export', icon: <FileOutput />, action: () => exportUSC() },
     { type: 'separator' },
     { label: 'cut', icon: <Scissors />, action: () => cut() },
