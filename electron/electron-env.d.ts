@@ -27,5 +27,6 @@ interface Window {
     openFile: () => any
     saveFileAs: (defaultPath: string | null, content: string) => any
     saveFile: (filePath: string, content: string) => any
+    showSettings: () => void
   }
 }

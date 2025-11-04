@@ -61,6 +61,10 @@ const runCommand = (command: string) => {
       newFile()
       break
 
+    case 'showSettings':
+      window.ipcRenderer.showSettings()
+      break
+
     default:
       break
   }

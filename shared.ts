@@ -43,7 +43,28 @@ export const menuData = [
       { label: 'Select All', accelerator: 'CmdOrCtrl+A', action: 'selectAll' },
       { label: 'Flip', accelerator: 'CmdOrCtrl+F', action: 'flipSelection' },
       { type: 'separator' },
-      { label: 'Settings', accelerator: 'CmdOrCtrl+,' },
+      {
+        label: 'Settings',
+        accelerator: 'CmdOrCtrl+,',
+        action: 'showSettings',
+      },
     ],
   },
+]
+
+export const setAccentColor = (color: string) => {
+  document.body.classList.remove(...accentColorList)
+  document.body.classList.add(color)
+}
+
+export const accentColorList = [
+  'red',
+  'orange',
+  'yellow',
+  'lime',
+  'emerald',
+  'cyan',
+  'blue',
+  'purple',
+  'pink',
 ]
