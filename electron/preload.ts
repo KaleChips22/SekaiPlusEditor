@@ -33,4 +33,5 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     ipcRenderer.invoke('show-save-dialog', defaultPath, content),
   saveFile: (filePath: string, content: string) =>
     ipcRenderer.invoke('save-file', filePath, content),
+  showSettings: () => ipcRenderer.invoke('show-settings'),
 })

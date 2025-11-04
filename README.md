@@ -26,10 +26,19 @@ These are my to-dos, in order of priority
 - [x] Flip/Flip Paste
 - [x] Exporting and Importing
 - [x] Save to file (_.pjsk_ file)
-- [ ] Settings Panel
-  - [ ] Editor Options
-  - [ ] Visual Options
+- [x] Settings Panel
+  - [x] Editor Options
+  - [x] Visual Options
+  - _NOTE: more options will be added later_
 - [ ] Undo and redo
+- [ ] Replace USC export with next sekai level data
 - [ ] Options Panel
-- [ ] Note Properties Panel
 - [ ] Preview Mode
+- [ ] mmw4cc features
+  - [ ] Interpolate Hi-speeds (using next sekai hi speed easing)
+  - [ ] Repeat hold mids 🙏
+  - [ ] Damage notes
+  - [ ] Colored guides
+  - [ ] Note Properties Panel
+- [ ] Downwards flick
+- [ ] Other next sekai features?

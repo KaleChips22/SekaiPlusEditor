@@ -55,6 +55,8 @@ function createWindow() {
     win?.webContents.send('main-process-message', {
       platform: process.platform,
     })
+
+    win?.webContents.send('update-options', options)
   })
 
   if (VITE_DEV_SERVER_URL) {
@@ -63,6 +65,8 @@ function createWindow() {
     // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
+
+  win.on('close', () => (settingsWindow = null))
 
   win.on('resize', () => {
     const { width, height } = win!.getContentBounds()
@@ -97,6 +101,69 @@ function createWindow() {
   })
 }
 
+let settingsWindow: BrowserWindow | null
+
+function createSettingsWindow() {
+  if (settingsWindow) {
+    settingsWindow.focus()
+    return
+  }
+
+  settingsWindow = new BrowserWindow({
+    icon: path.join(process.env.VITE_PUBLIC, 'icon/icon_512.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.mjs'),
+    },
+    frame: false,
+    titleBarStyle: 'hidden',
+    trafficLightPosition: {
+      x: 10,
+      y: 10,
+    },
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    vibrancy: 'fullscreen-ui',
+    visualEffectState: 'active',
+    parent: win!,
+    title: 'Settings',
+    width: 500,
+    height: 350,
+    minWidth: 250,
+    minHeight: 200,
+    acceptFirstMouse: true,
+  })
+
+  settingsWindow.webContents.on('did-finish-load', () => {
+    // win?.webContents.send('main-process-message', new Date().toLocaleString())
+    settingsWindow?.webContents.send('main-process-message', {
+      platform: process.platform,
+    })
+
+    settingsWindow?.webContents.send('update-options', options)
+  })
+
+  settingsWindow.on('close', () => (settingsWindow = null))
+
+  if (VITE_DEV_SERVER_URL) {
+    settingsWindow.loadURL(VITE_DEV_SERVER_URL + '/settings.html')
+  } else {
+    // win.loadFile('dist/index.html')
+    settingsWindow.loadFile(path.join(RENDERER_DIST, 'settings.html'))
+  }
+
+  settingsWindow.webContents.ipc.on('set-options', (_, newOptions: any) => {
+    for (const [k, v] of Object.entries(newOptions)) {
+      if (k in options) {
+        ;(options as any)[k] = v
+      }
+    }
+
+    win?.webContents.send('update-options', options)
+    settingsWindow?.webContents.send('update-options', options)
+  })
+}
+
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
@@ -119,7 +186,7 @@ app.whenReady().then(() => {
   createWindow()
 
   // console.log(win !== null && 'webContents' in win)
-  win!.webContents.send('command', 'hi')
+  // win!.webContents.send('command', 'hi')
 
   const menuTemplate = [
     {
@@ -199,4 +266,15 @@ ipcMain.handle('save-file', async (_, filePath, content) => {
     dialog.showErrorBox('Error', 'Could not save file.')
     return null
   }
+})
+
+let options = {
+  accentColor: 'purple',
+  hideTickOutlines: false,
+  hideTickOutlinesOnPlay: true,
+  laneWidth: 55,
+}
+
+ipcMain.handle('show-settings', () => {
+  createSettingsWindow()
 })

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Titlebar from './components/Titlebar'
-import { titleBarHeight } from '../shared'
+import { setAccentColor, titleBarHeight } from '../shared'
 import { twMerge } from 'tailwind-merge'
 import MenuBar from './components/MenuBar'
 import ToolBar from './components/Toolbar'
@@ -9,6 +9,7 @@ import EditorFooter from './components/EditorFooter'
 import Editor from './components/Editor'
 import { globalState } from './lib'
 import runCommand from './commands'
+import { setOptions } from './editor/draw'
 
 const App = () => {
   const [platform, setPlatform] = useState<string | null>(null)
@@ -47,11 +48,17 @@ const App = () => {
     }
     window.ipcRenderer.on('command', commandHandler)
 
+    window.ipcRenderer.on('update-options', (_, options) => {
+      setAccentColor(options.accentColor)
+      setOptions(options)
+    })
+
     return () => {
       // window.ipcRenderer.off('main-process-message', mainHandler)
       window.ipcRenderer.removeAllListeners('main-process-message')
       // window.ipcRenderer.off('command', commandHandler)
       window.ipcRenderer.removeAllListeners('command')
+      window.ipcRenderer.removeAllListeners('update-options')
     }
   }, [])
 

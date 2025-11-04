@@ -17,8 +17,9 @@ import { getRect } from './noteImage'
 import { notesToPJSK } from './PJSK'
 import { notesToUSC } from './USC'
 
-const LANE_WIDTH = 55
-const BEAT_HEIGHT = LANE_WIDTH * 4
+const BEAT_HEIGHT = 220
+
+let laneWidth = 55
 const NOTE_HEIGHT = 45
 
 // let tSigTop = 4
@@ -43,6 +44,17 @@ let dragStartY: number | null = null
 
 const clipboard: Note[] = []
 let isPasting = false
+
+let hideTickOutlines = false
+let hideTickOutlinesOnPlay = true
+
+export const setOptions = (options: any) => {
+  for (const [k, v] of Object.entries(options) as [string, any]) {
+    if (k === 'hideTickOutlines') hideTickOutlines = v
+    if (k === 'hideTickOutlinesOnPlay') hideTickOutlinesOnPlay = v
+    if (k === 'laneWidth') laneWidth = v
+  }
+}
 
 enum DragMode {
   Move,
@@ -1007,7 +1019,7 @@ const draw = (
 
   const getLaneFromMouse = (mouseX: number): number =>
     Math.round(
-      Math.max(-3, Math.min(3, (mouseX - width / 2) / (LANE_WIDTH * 2))) * 2
+      Math.max(-3, Math.min(3, (mouseX - width / 2) / (laneWidth * 2))) * 2
     ) / 2
 
   const getNearestDivision = (beat: number): number => {
@@ -1094,8 +1106,8 @@ const draw = (
   ) {
     const xOff = dragStartX - mouseX
 
-    if (xOff > LANE_WIDTH / 2) {
-      dragStartX -= LANE_WIDTH
+    if (xOff > laneWidth / 2) {
+      dragStartX -= laneWidth
 
       if (
         dragMode === DragMode.Move &&
@@ -1131,9 +1143,9 @@ const draw = (
             n.lane -= 0.25
             n.size -= 0.5
           })
-      else dragStartX += LANE_WIDTH
-    } else if (xOff < -LANE_WIDTH / 2) {
-      dragStartX += LANE_WIDTH
+      else dragStartX += laneWidth
+    } else if (xOff < -laneWidth / 2) {
+      dragStartX += laneWidth
 
       if (
         dragMode === DragMode.Move &&
@@ -1168,7 +1180,7 @@ const draw = (
             n.lane += 0.25
             n.size += 0.5
           })
-      else dragStartX -= LANE_WIDTH
+      else dragStartX -= laneWidth
     }
 
     if (dragMode === DragMode.Move) {
@@ -1291,7 +1303,7 @@ const draw = (
       if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
         const o =
           width / 2 +
-          LANE_WIDTH * 6 +
+          laneWidth * 6 +
           getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
         const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
         const b = beatToY(n.beat)
@@ -1325,9 +1337,9 @@ const draw = (
           dragStartY = mouseY
 
           let dragScaleLeftEdge =
-            width / 2 + LANE_WIDTH * (note.lane - note.size / 2 + 1 / 6) * 2
+            width / 2 + laneWidth * (note.lane - note.size / 2 + 1 / 6) * 2
           let dragScaleRightEdge =
-            width / 2 + LANE_WIDTH * (note.lane + note.size / 2 - 1 / 6) * 2
+            width / 2 + laneWidth * (note.lane + note.size / 2 - 1 / 6) * 2
 
           if (mouseX <= dragScaleLeftEdge) dragMode = DragMode.ScaleLeft
           else if (mouseX >= dragScaleRightEdge) dragMode = DragMode.ScaleRight
@@ -1363,10 +1375,10 @@ const draw = (
 
           let dragScaleLeftEdge =
             width / 2 +
-            LANE_WIDTH * (noteToDrag.lane - noteToDrag.size / 2 + 1 / 6) * 2
+            laneWidth * (noteToDrag.lane - noteToDrag.size / 2 + 1 / 6) * 2
           let dragScaleRightEdge =
             width / 2 +
-            LANE_WIDTH * (noteToDrag.lane + noteToDrag.size / 2 - 1 / 6) * 2
+            laneWidth * (noteToDrag.lane + noteToDrag.size / 2 - 1 / 6) * 2
 
           if (mouseX <= dragScaleLeftEdge) dragMode = DragMode.ScaleLeft
           else if (mouseX >= dragScaleRightEdge) dragMode = DragMode.ScaleRight
@@ -1454,7 +1466,7 @@ const draw = (
           Math.max(
             -3 + nextNoteOptions.size / 2,
             Math.floor(
-              (mouseX - width / 2) / LANE_WIDTH +
+              (mouseX - width / 2) / laneWidth +
                 (nextNoteOptions.size % 1 === 0 ? 0.5 : 0)
             ) /
               2 +
@@ -1569,8 +1581,8 @@ const draw = (
               const lanePos = (1 - easedY) * note.lane + easedY * nN.lane
               const sizePos = (1 - easedY) * note.size + easedY * nN.size
 
-              const minX = (lanePos - sizePos / 2) * 2 * LANE_WIDTH + width / 2
-              const maxX = (lanePos + sizePos / 2) * 2 * LANE_WIDTH + width / 2
+              const minX = (lanePos - sizePos / 2) * 2 * laneWidth + width / 2
+              const maxX = (lanePos + sizePos / 2) * 2 * laneWidth + width / 2
 
               // console.log(minX, mouseX, maxX)
 
@@ -1649,7 +1661,7 @@ const draw = (
           if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
             const o =
               width / 2 +
-              LANE_WIDTH * 6 +
+              laneWidth * 6 +
               getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
             const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
             const b = beatToY(n.beat)
@@ -1768,11 +1780,11 @@ const draw = (
 
   const drawLanes = () => {
     ctx.fillStyle = '#2229'
-    ctx.fillRect(width / 2 - 6 * LANE_WIDTH, 0, 12 * LANE_WIDTH, height)
+    ctx.fillRect(width / 2 - 6 * laneWidth, 0, 12 * laneWidth, height)
 
     ctx.beginPath()
     for (let i = 0; i < 13; i += 2) {
-      let xOff = width / 2 + LANE_WIDTH * (i - 6)
+      let xOff = width / 2 + laneWidth * (i - 6)
       ctx.moveTo(xOff, 0)
       ctx.lineTo(xOff, height)
     }
@@ -1782,7 +1794,7 @@ const draw = (
 
     ctx.beginPath()
     for (let i = 1; i < 13; i += 2) {
-      let xOff = width / 2 + LANE_WIDTH * (i - 6)
+      let xOff = width / 2 + laneWidth * (i - 6)
       ctx.moveTo(xOff, 0)
       ctx.lineTo(xOff, height)
     }
@@ -1847,8 +1859,8 @@ const draw = (
           Math.abs(Math.round(beatTimesFactor) - beatTimesFactor) < 1e-9
 
         if (isMeasureLine) {
-          ctx.moveTo(width / 2 - 7 * LANE_WIDTH, y)
-          ctx.lineTo(width / 2 + 7 * LANE_WIDTH, y)
+          ctx.moveTo(width / 2 - 7 * laneWidth, y)
+          ctx.lineTo(width / 2 + 7 * laneWidth, y)
           ctx.strokeStyle = 'rgba(220,220,220,0.95)'
           ctx.lineWidth = 3
           ctx.stroke()
@@ -1861,20 +1873,20 @@ const draw = (
 
           ctx.fillText(
             measureIndex.toString(),
-            width / 2 - 7 * LANE_WIDTH - 30,
+            width / 2 - 7 * laneWidth - 30,
             y
           )
         } else if (isBeatLine) {
           // full beat lines are more visible than subdivisions
-          ctx.moveTo(width / 2 - 6 * LANE_WIDTH, y)
-          ctx.lineTo(width / 2 + 6 * LANE_WIDTH, y)
+          ctx.moveTo(width / 2 - 6 * laneWidth, y)
+          ctx.lineTo(width / 2 + 6 * laneWidth, y)
           ctx.strokeStyle = 'rgba(221,221,221,0.75)'
           ctx.lineWidth = 2
           ctx.stroke()
         } else {
           // subdivisions should be faint
-          ctx.moveTo(width / 2 - 6 * LANE_WIDTH, y)
-          ctx.lineTo(width / 2 + 6 * LANE_WIDTH, y)
+          ctx.moveTo(width / 2 - 6 * laneWidth, y)
+          ctx.lineTo(width / 2 + 6 * laneWidth, y)
           ctx.strokeStyle = 'rgba(119,119,119,0.67)'
           ctx.lineWidth = 1
           ctx.stroke()
@@ -1894,8 +1906,8 @@ const draw = (
 
     if (visibleMaxBeat <= visibleMinBeat) return
 
-    const leftEdge = width / 2 - 6 * LANE_WIDTH
-    const rightEdge = width / 2 + 6 * LANE_WIDTH
+    const leftEdge = width / 2 - 6 * laneWidth
+    const rightEdge = width / 2 + 6 * laneWidth
     const centerX = (leftEdge + rightEdge) / 2
     const maxHalfWidth = (rightEdge - leftEdge) / 2 - 6 // small padding
 
@@ -1961,16 +1973,16 @@ const draw = (
 
   if (cursorY >= 0 && cursorY <= height) {
     ctx.beginPath()
-    ctx.moveTo(width / 2 - 6 * LANE_WIDTH - 1, cursorY)
-    ctx.lineTo(width / 2 + 6 * LANE_WIDTH, cursorY)
+    ctx.moveTo(width / 2 - 6 * laneWidth - 1, cursorY)
+    ctx.lineTo(width / 2 + 6 * laneWidth, cursorY)
     ctx.strokeStyle = 'red'
     ctx.lineWidth = 3
     ctx.stroke()
 
     ctx.beginPath()
-    ctx.moveTo(width / 2 - 6 * LANE_WIDTH, cursorY)
-    ctx.lineTo(width / 2 - 6 * LANE_WIDTH - 16, cursorY - 10)
-    ctx.lineTo(width / 2 - 6 * LANE_WIDTH - 16, cursorY + 10)
+    ctx.moveTo(width / 2 - 6 * laneWidth, cursorY)
+    ctx.lineTo(width / 2 - 6 * laneWidth - 16, cursorY - 10)
+    ctx.lineTo(width / 2 - 6 * laneWidth - 16, cursorY + 10)
     ctx.fillStyle = 'red'
     ctx.fill()
   }
@@ -2023,7 +2035,7 @@ const draw = (
     if (n.type === 'HiSpeed') {
       const note = n as HiSpeed
       const y = beatToY(beat)
-      const lanesEdge = width / 2 + 6 * LANE_WIDTH
+      const lanesEdge = width / 2 + 6 * laneWidth
 
       const startX = getEventOffset(note)
 
@@ -2059,7 +2071,7 @@ const draw = (
     } else if (n.type === 'TimeSignature') {
       const note = n as TimeSignature
       const y = beatToY(beat)
-      const lanesEdge = width / 2 + 6 * LANE_WIDTH
+      const lanesEdge = width / 2 + 6 * laneWidth
 
       const startX = getEventOffset(note)
 
@@ -2095,7 +2107,7 @@ const draw = (
     } else if (n.type === 'BPMChange') {
       const note = n as BPMChange
       const y = beatToY(beat)
-      const lanesEdge = width / 2 + 6 * LANE_WIDTH
+      const lanesEdge = width / 2 + 6 * laneWidth
 
       const startX = getEventOffset(note)
 
@@ -2132,18 +2144,20 @@ const draw = (
 
     let aspectRatio = 4
 
-    const x = width / 2 + (lane * 2 - size) * LANE_WIDTH
-    const w = size * 2 * LANE_WIDTH
+    const x = width / 2 + (lane * 2 - size) * laneWidth
+    const w = size * 2 * laneWidth
     const y = beatToY(beat) - NOTE_HEIGHT / 2
     const h = NOTE_HEIGHT
 
     if (n.type === 'HoldTick') {
-      ctx.beginPath()
-      ctx.roundRect(x, y + 16, w, h - 32, 4)
+      if (!hideTickOutlines && !(hideTickOutlinesOnPlay && isPlaying)) {
+        ctx.beginPath()
+        ctx.roundRect(x, y + 16, w, h - 32, 4)
 
-      ctx.strokeStyle = '#7fffd3'
-      if ((n as HoldTick).tickType === TickType.Skip) ctx.strokeStyle = 'cyan'
-      ctx.stroke()
+        ctx.strokeStyle = '#7fffd3'
+        if ((n as HoldTick).tickType === TickType.Skip) ctx.strokeStyle = 'cyan'
+        ctx.stroke()
+      }
     } else {
       const noteImageName = getNoteImageName(n)
       if (noteImageName === 'none') return
@@ -2242,7 +2256,7 @@ const draw = (
 
         const tw = (1.75 * traceRect.w) / aspectRatio
         const th = (1.75 * traceRect.h) / aspectRatio
-        let tx = (width - tw) / 2 + lane * 2 * LANE_WIDTH
+        let tx = (width - tw) / 2 + lane * 2 * laneWidth
 
         if (
           (note as any).type === 'HoldTick' &&
@@ -2267,7 +2281,7 @@ const draw = (
               : percentY
           tx =
             (width - tw) / 2 +
-            ((1 - easedY) * pN.lane + easedY * nN.lane) * 2 * LANE_WIDTH
+            ((1 - easedY) * pN.lane + easedY * nN.lane) * 2 * laneWidth
         }
 
         const ty = y - NOTE_HEIGHT / 20
@@ -2314,7 +2328,7 @@ const draw = (
 
         let fw = (1.25 * flickRect.w) / aspectRatio
         const fh = (1.25 * flickRect.h) / aspectRatio
-        let fx = (width - fw) / 2 + lane * 2 * LANE_WIDTH
+        let fx = (width - fw) / 2 + lane * 2 * laneWidth
         const fy = y - fh
 
         if (note.flickDir === FlickDirection.Right) {
@@ -2348,8 +2362,8 @@ const draw = (
     const { lane, beat, size } = n
 
     const x =
-      width / 2 + (lane * 2 - size) * LANE_WIDTH - selectionOutlinePadding
-    const w = size * 2 * LANE_WIDTH + 2 * selectionOutlinePadding
+      width / 2 + (lane * 2 - size) * laneWidth - selectionOutlinePadding
+    const w = size * 2 * laneWidth + 2 * selectionOutlinePadding
     const y = beatToY(beat) - NOTE_HEIGHT / 2 + selectionOutlinePadding / 2
     const h = NOTE_HEIGHT - selectionOutlinePadding
 
@@ -2375,13 +2389,12 @@ const draw = (
       nextNote = nextNote.nextNode
     }
 
-    const startX = width / 2 + (note.lane - note.size / 2) * 2 * LANE_WIDTH
-    const startW = note.size * 2 * LANE_WIDTH
+    const startX = width / 2 + (note.lane - note.size / 2) * 2 * laneWidth
+    const startW = note.size * 2 * laneWidth
     const startY = beatToY(note.beat)
 
-    const endX =
-      width / 2 + (nextNote.lane - nextNote.size / 2) * 2 * LANE_WIDTH
-    const endW = nextNote.size * 2 * LANE_WIDTH
+    const endX = width / 2 + (nextNote.lane - nextNote.size / 2) * 2 * laneWidth
+    const endW = nextNote.size * 2 * laneWidth
     const endY = beatToY(nextNote.beat)
 
     ctx.beginPath()
@@ -2549,7 +2562,7 @@ const draw = (
         Math.max(
           -3 + nextNoteOptions.size / 2,
           Math.floor(
-            (mouseX - width / 2) / LANE_WIDTH +
+            (mouseX - width / 2) / laneWidth +
               (nextNoteOptions.size % 1 === 0 ? 0.5 : 0)
           ) /
             2 +
