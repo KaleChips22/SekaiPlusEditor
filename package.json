@@ -16,16 +16,17 @@
     "build": "tsc && vite build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "build_all": "tsc && vite build && electron-builder -mwl"
+    "build_all": "tsc && vite build && electron-builder -mwl",
+    "publish": "tsc && vite build && electron-builder -mwl -p always"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
+    "electron-updater": "^6.6.2",
     "lucide-react": "^0.545.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss": "^4.1.14",
-    "update-electron-app": "^3.1.1"
+    "tailwindcss": "^4.1.14"
   },
   "devDependencies": {
     "@types/react": "^18.2.64",

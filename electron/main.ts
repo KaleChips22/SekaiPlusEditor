@@ -3,9 +3,12 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { menuData, titleBarHeight, trafficLightsSize } from '../shared'
 import fs from 'fs/promises'
-import { updateElectronApp } from 'update-electron-app'
+import electronUpdater, { type AppUpdater } from 'electron-updater'
 
-updateElectronApp()
+function getAutoUpdater(): AppUpdater {
+  const { autoUpdater } = electronUpdater
+  return autoUpdater
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -277,4 +280,8 @@ let options = {
 
 ipcMain.handle('show-settings', () => {
   createSettingsWindow()
+})
+
+app.on('ready', () => {
+  getAutoUpdater().checkForUpdatesAndNotify()
 })

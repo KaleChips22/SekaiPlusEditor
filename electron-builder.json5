@@ -9,6 +9,7 @@
     output: 'release/${version}',
   },
   files: ['dist', 'dist-electron'],
+  publish: ['github'],
   mac: {
     target: ['dmg'],
     artifactName: '${productName}-Mac-${version}-Installer.${ext}',
