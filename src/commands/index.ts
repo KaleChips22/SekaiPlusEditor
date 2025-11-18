@@ -8,11 +8,21 @@ import {
   saveAsPJSK,
   savePJSK,
   selectAll,
+  undo,
+  redo,
 } from '../editor/draw'
 import { newFile, openFile } from '../editor/fileOps'
 
 const runCommand = (command: string) => {
   switch (command) {
+    case 'undo':
+      undo()
+      break
+
+    case 'redo':
+      redo()
+      break
+
     case 'deleteSelected':
       deleteSelected()
       break

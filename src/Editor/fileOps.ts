@@ -1,4 +1,4 @@
-import { setChartNotes, setMusicOffset } from './draw'
+import { clearHistory, setChartNotes, setMusicOffset } from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
 
@@ -22,6 +22,7 @@ export const openFile = () => {
 
         setMusicOffset(offset)
         setChartNotes(notes)
+        clearHistory()
       } else {
         updateCurrentFilePath(result.filePath)
         const { notes, offset } = PJSKToNotes(json)
@@ -30,6 +31,7 @@ export const openFile = () => {
 
         setMusicOffset(offset)
         setChartNotes(notes)
+        clearHistory()
       }
     }
   }
@@ -69,4 +71,5 @@ export const newFile = () => {
 
   setChartNotes([])
   updateCurrentFilePath(null)
+  clearHistory()
 }

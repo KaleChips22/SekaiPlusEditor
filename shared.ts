@@ -23,8 +23,8 @@ export const menuData = [
   {
     label: 'Edit',
     submenu: [
-      { role: 'undo' },
-      { role: 'redo' },
+      { label: 'Undo', accelerator: 'CmdOrCtrl+Z', action: 'undo' },
+      { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', action: 'redo' },
       { type: 'separator' },
       {
         label: 'Delete',

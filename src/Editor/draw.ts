@@ -16,6 +16,7 @@ import {
 import { getRect } from './noteImage'
 import { notesToPJSK } from './PJSK'
 import { notesToUSC } from './USC'
+import { historyManager } from './history'
 
 const BEAT_HEIGHT = 220
 
@@ -64,7 +65,7 @@ enum DragMode {
 }
 let dragMode = DragMode.None
 
-export let nextNoteOptions = {
+export const nextNoteOptions = {
   size: 1.5,
   tickType: TickType.Normal,
   flickDir: FlickDirection.Default,
@@ -109,7 +110,7 @@ const initSounds = async () => {
   longBuffer = await loadSound('sound/note_sfx/se_live_long.mp3', longContext)
   longGoldBuffer = await loadSound(
     'sound/note_sfx/se_live_long_critical.mp3',
-    longGoldContext
+    longGoldContext,
   )
 }
 
@@ -203,7 +204,7 @@ export const setMusic = (file: File) => {
     // decode audio into PCM and precompute waveform buckets
     try {
       const audioBuffer = await longContext.decodeAudioData(
-        arrayBuffer.slice(0)
+        arrayBuffer.slice(0),
       )
 
       waveformDuration = audioBuffer.duration
@@ -354,6 +355,55 @@ export const setChartNotes = (notes: Note[]) => {
   notes.forEach((n) => chartNotes.push(n))
 }
 
+/**
+ * Save the current chart state to history before making modifications
+ */
+const saveHistory = () => {
+  historyManager.saveState(chartNotes)
+}
+
+/**
+ * Undo the last action
+ */
+export const undo = () => {
+  const previousState = historyManager.undo(chartNotes)
+  if (previousState) {
+    setChartNotes(previousState)
+    selectedIndeces.clear()
+    console.log('Undo successful:', historyManager.getHistorySummary())
+  }
+}
+
+/**
+ * Redo the last undone action
+ */
+export const redo = () => {
+  const nextState = historyManager.redo(chartNotes)
+  if (nextState) {
+    setChartNotes(nextState)
+    selectedIndeces.clear()
+    console.log('Redo successful:', historyManager.getHistorySummary())
+  }
+}
+
+/**
+ * Check if undo is available
+ */
+export const canUndo = () => historyManager.canUndo()
+
+/**
+ * Check if redo is available
+ */
+export const canRedo = () => historyManager.canRedo()
+
+/**
+ * Clear all history (useful when opening a new file)
+ */
+export const clearHistory = () => {
+  historyManager.clear()
+  console.log('History cleared')
+}
+
 export const exportUSC = () => {
   const usc = notesToUSC(chartNotes, musicOffsetMs)
 
@@ -430,6 +480,7 @@ export const savePJSK = () => {
 const selectedIndeces = new Set<number>()
 
 export const deleteSelected = () => {
+  saveHistory()
   chartNotes.forEach((n, i) => {
     if (!selectedIndeces.has(i)) return
     if (n.type === 'HoldStart') {
@@ -466,6 +517,7 @@ export const selectAll = () => {
 
 export const setHiSpeed = (speed: number) => {
   if (selectedIndeces.size === 1) {
+    saveHistory()
     selectedIndeces.forEach((i) => {
       const note = chartNotes[i]
 
@@ -495,6 +547,7 @@ export const getDefaultHiSpeed = () => {
 
 export const setBPM = (BPM: number) => {
   if (selectedIndeces.size === 1) {
+    saveHistory()
     selectedIndeces.forEach((i) => {
       const note = chartNotes[i]
 
@@ -524,6 +577,7 @@ export const getDefaultBPM = () => {
 
 export const setTimeSignature = (top: number, bottom: number) => {
   if (selectedIndeces.size === 1) {
+    saveHistory()
     selectedIndeces.forEach((i) => {
       const note = chartNotes[i]
 
@@ -554,8 +608,10 @@ export const getDefaultTimeSignature = () => {
 
 const flipNotes = (notes: Note[]) => notes.forEach((n) => (n.lane *= -1))
 
-export const flipSelection = () =>
+export const flipSelection = () => {
+  saveHistory()
   selectedIndeces.forEach((i) => (chartNotes[i].lane *= -1))
+}
 
 export const paste = (flip: boolean = false) => {
   if (flip) flipNotes(clipboard)
@@ -600,7 +656,7 @@ export const copy = () => {
 
   // Build an ordered list of selected notes (stable by chart order)
   const selectedIndicesOrdered = Array.from(selectedIndeces).sort(
-    (a, b) => a - b
+    (a, b) => a - b,
   )
   const selectedNotes = selectedIndicesOrdered.map((i) => chartNotes[i])
 
@@ -907,7 +963,7 @@ const getTsig = (beat: number) => {
 const getTime = (beat: number) => {
   let time = 0
   const changes = chartNotes.filter(
-    (n) => n.type === 'BPMChange' && n.beat < beat
+    (n) => n.type === 'BPMChange' && n.beat < beat,
   )
 
   for (let i = 0; i < changes.length; i++) {
@@ -935,7 +991,7 @@ const draw = (
   width: number,
   height: number,
   globalState: globalState,
-  timeStamp: number
+  timeStamp: number,
 ) => {
   if (lastTime == undefined) {
     lastTime = timeStamp
@@ -1019,7 +1075,7 @@ const draw = (
 
   const getLaneFromMouse = (mouseX: number): number =>
     Math.round(
-      Math.max(-3, Math.min(3, (mouseX - width / 2) / (laneWidth * 2))) * 2
+      Math.max(-3, Math.min(3, (mouseX - width / 2) / (laneWidth * 2))) * 2,
     ) / 2
 
   const getNearestDivision = (beat: number): number => {
@@ -1029,7 +1085,7 @@ const draw = (
   }
 
   const getEventSize = (
-    event: BPMChange | TimeSignature | HiSpeed
+    event: BPMChange | TimeSignature | HiSpeed,
   ): { width: number; height: number } => {
     const fontSize = '24px'
     const fontFamily = 'Arial'
@@ -1042,8 +1098,8 @@ const draw = (
       event.type === 'HiSpeed'
         ? `${(event as HiSpeed).speed}x`
         : event.type === 'BPMChange'
-        ? `${(event as BPMChange).BPM} BPM`
-        : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
+          ? `${(event as BPMChange).BPM} BPM`
+          : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
     document.body.appendChild(textEl)
     const { width: textWidth, height: textHeight } =
       textEl.getBoundingClientRect()
@@ -1137,7 +1193,7 @@ const draw = (
   let _eventOffsetCache = computeEventOffsets()
 
   const getEventOffset = (
-    event: BPMChange | TimeSignature | HiSpeed
+    event: BPMChange | TimeSignature | HiSpeed,
   ): number => {
     return _eventOffsetCache.get(event) ?? 20
   }
@@ -1158,7 +1214,7 @@ const draw = (
       if (
         dragMode === DragMode.Move &&
         chartNotes.filter(
-          (n, i) => selectedIndeces.has(i) && n.lane - n.size / 2 <= -2.75
+          (n, i) => selectedIndeces.has(i) && n.lane - n.size / 2 <= -2.75,
         ).length === 0
       )
         chartNotes
@@ -1169,7 +1225,7 @@ const draw = (
         chartNotes.filter(
           (n, i) =>
             selectedIndeces.has(i) &&
-            (n.size > 5.5 || n.lane - n.size / 2 <= -3)
+            (n.size > 5.5 || n.lane - n.size / 2 <= -3),
         ).length === 0
       )
         chartNotes
@@ -1196,7 +1252,7 @@ const draw = (
       if (
         dragMode === DragMode.Move &&
         chartNotes.filter(
-          (n, i) => selectedIndeces.has(i) && n.lane + n.size / 2 >= 2.75
+          (n, i) => selectedIndeces.has(i) && n.lane + n.size / 2 >= 2.75,
         ).length === 0
       )
         chartNotes
@@ -1217,7 +1273,8 @@ const draw = (
         dragMode === DragMode.ScaleRight &&
         chartNotes.filter(
           (n, i) =>
-            selectedIndeces.has(i) && (n.size > 5.5 || n.lane + n.size / 2 >= 3)
+            selectedIndeces.has(i) &&
+            (n.size > 5.5 || n.lane + n.size / 2 >= 3),
         ).length === 0
       )
         chartNotes
@@ -1244,7 +1301,7 @@ const draw = (
       } else if (yOff < -divisionHeight / 2) {
         if (
           chartNotes.filter(
-            (n, i) => selectedIndeces.has(i) && n.beat < (4 / division) * itter
+            (n, i) => selectedIndeces.has(i) && n.beat < (4 / division) * itter,
           ).length === 0
         ) {
           dragStartY += divisionHeight * itter
@@ -1267,14 +1324,15 @@ const draw = (
 
     // If we're in paste mode, commit the clipboard here where the user clicked.
     if (isPasting) {
+      saveHistory()
       // Compute lane/beat offsets (same logic as preview) and create adjusted clones
       const rawLaneOffset = getLaneFromMouse(mouseX!)
 
       const groupLeft = Math.min(
-        ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2)
+        ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2),
       )
       const groupRight = Math.max(
-        ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2)
+        ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2),
       )
       const groupCenter = (groupLeft + groupRight) / 2
       const desiredLaneOffset = rawLaneOffset - groupCenter
@@ -1464,6 +1522,8 @@ const draw = (
 
           let note = chartNotes[i] as TapNote
 
+          saveHistory()
+
           if (selectedTool === 5) {
             if ((note as any).type !== 'HoldTick') {
               if (
@@ -1513,19 +1573,20 @@ const draw = (
             -3 + nextNoteOptions.size / 2,
             Math.floor(
               (mouseX - width / 2) / laneWidth +
-                (nextNoteOptions.size % 1 === 0 ? 0.5 : 0)
+                (nextNoteOptions.size % 1 === 0 ? 0.5 : 0),
             ) /
               2 +
-              (nextNoteOptions.size % 1 === 0 ? 0 : 0.25)
-          )
+              (nextNoteOptions.size % 1 === 0 ? 0 : 0.25),
+          ),
         )
 
         if (selectedTool === 8) {
           if (
             chartNotes.filter(
-              (n) => n.type === 'BPMChange' && n.beat === nearestBeat
+              (n) => n.type === 'BPMChange' && n.beat === nearestBeat,
             ).length === 0
           ) {
+            saveHistory()
             const newNote = {
               beat: nearestBeat,
               lane: 0,
@@ -1539,9 +1600,10 @@ const draw = (
         } else if (selectedTool === 9) {
           if (
             chartNotes.filter(
-              (n) => n.type === 'TimeSignature' && n.beat === nearestBeat
+              (n) => n.type === 'TimeSignature' && n.beat === nearestBeat,
             ).length === 0
           ) {
+            saveHistory()
             const newNote = {
               beat: nearestBeat,
               lane: 0,
@@ -1556,9 +1618,10 @@ const draw = (
         } else if (selectedTool === 10) {
           if (
             chartNotes.filter(
-              (n) => n.type === 'HiSpeed' && n.beat === nearestBeat
+              (n) => n.type === 'HiSpeed' && n.beat === nearestBeat,
             ).length === 0
           ) {
+            saveHistory()
             const newNote = {
               beat: nearestBeat,
               lane: 0,
@@ -1570,6 +1633,7 @@ const draw = (
             chartNotes.push(newNote)
           }
         } else if (selectedTool === 2 || selectedTool === 7) {
+          saveHistory()
           const newStartNote = {
             type: 'HoldStart',
             beat: nearestBeat,
@@ -1599,6 +1663,7 @@ const draw = (
           chartNotes.push(newStartNote)
           chartNotes.push(newEndNote)
         } else if (selectedTool === 3) {
+          saveHistory()
           const viableNotes = chartNotes
             .filter((n) => {
               if (
@@ -1621,8 +1686,8 @@ const draw = (
                 note.easingType === EasingType.EaseIn
                   ? Math.pow(percentY, 2)
                   : note.easingType === EasingType.EaseOut
-                  ? 1 - Math.pow(1 - percentY, 2)
-                  : percentY
+                    ? 1 - Math.pow(1 - percentY, 2)
+                    : percentY
 
               const lanePos = (1 - easedY) * note.lane + easedY * nN.lane
               const sizePos = (1 - easedY) * note.size + easedY * nN.size
@@ -1665,6 +1730,7 @@ const draw = (
             chartNotes.push(newNote)
           }
         } else {
+          saveHistory()
           const newNote = {
             type: 'Tap',
             beat: nearestBeat,
@@ -1920,7 +1986,7 @@ const draw = (
           ctx.fillText(
             measureIndex.toString(),
             width / 2 - 7 * laneWidth - 30,
-            y
+            y,
           )
         } else if (isBeatLine) {
           // full beat lines are more visible than subdivisions
@@ -2037,7 +2103,7 @@ const draw = (
   const maxBeat = getBeatFromMouse(-NOTE_HEIGHT)
 
   const notesToRender = chartNotes.filter(
-    (n) => n.beat >= minBeat && n.beat <= maxBeat
+    (n) => n.beat >= minBeat && n.beat <= maxBeat,
   )
 
   const getNoteImageName = (n: Note): string => {
@@ -2244,7 +2310,7 @@ const draw = (
         x1,
         y,
         w1,
-        h
+        h,
       )
 
       // last part
@@ -2257,7 +2323,7 @@ const draw = (
         x3,
         y,
         w3,
-        h
+        h,
       )
 
       // middle part
@@ -2270,7 +2336,7 @@ const draw = (
         x2,
         y,
         w2,
-        h
+        h,
       )
     }
 
@@ -2323,8 +2389,8 @@ const draw = (
             pN.easingType === EasingType.EaseIn
               ? Math.pow(percentY, 2)
               : pN.easingType === EasingType.EaseOut
-              ? 1 - Math.pow(1 - percentY, 2)
-              : percentY
+                ? 1 - Math.pow(1 - percentY, 2)
+                : percentY
           tx =
             (width - tw) / 2 +
             ((1 - easedY) * pN.lane + easedY * nN.lane) * 2 * laneWidth
@@ -2341,7 +2407,7 @@ const draw = (
           tx,
           ty,
           tw,
-          th
+          th,
         )
       }
     }
@@ -2392,7 +2458,7 @@ const draw = (
           fx,
           fy,
           fw,
-          fh
+          fh,
         )
 
         if (note.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
@@ -2451,7 +2517,7 @@ const draw = (
         startX + startW,
         (startY + endY) / 2,
         endX + endW,
-        endY
+        endY,
       )
     else if (note.easingType === EasingType.EaseOut)
       ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
@@ -2460,26 +2526,26 @@ const draw = (
         startX + startW,
         (startY + (startY + endY) / 2) / 2,
         (startX + endX) / 2 + (startW + endW) / 2,
-        (startY + endY) / 2
+        (startY + endY) / 2,
       )
       ctx.quadraticCurveTo(
         endX + endW,
         ((startY + endY) / 2 + endY) / 2,
         endX + endW,
-        endY
+        endY,
       )
     } else if (note.easingType === EasingType.EaseOutIn) {
       ctx.quadraticCurveTo(
         (startX + endX) / 2 + (startW + endW) / 2,
         (startY + (startY + endY) / 2) / 2,
         (startX + endX) / 2 + (startW + endW) / 2,
-        (startY + endY) / 2
+        (startY + endY) / 2,
       )
       ctx.quadraticCurveTo(
         (startX + endX) / 2 + (startW + endW) / 2,
         ((startY + endY) / 2 + endY) / 2,
         endX + endW,
-        endY
+        endY,
       )
     } else ctx.lineTo(endX + endW, endY)
 
@@ -2493,26 +2559,26 @@ const draw = (
         endX,
         ((startY + endY) / 2 + endY) / 2,
         (startX + endX) / 2,
-        (startY + endY) / 2
+        (startY + endY) / 2,
       )
       ctx.quadraticCurveTo(
         startX,
         (startY + (endY + startY) / 2) / 2,
         startX,
-        startY
+        startY,
       )
     } else if (note.easingType === EasingType.EaseOutIn) {
       ctx.quadraticCurveTo(
         (startX + endX) / 2,
         ((startY + endY) / 2 + endY) / 2,
         (startX + endX) / 2,
-        (startY + endY) / 2
+        (startY + endY) / 2,
       )
       ctx.quadraticCurveTo(
         (endX + startX) / 2,
         (startY + (endY + startY) / 2) / 2,
         startX,
-        startY
+        startY,
       )
     } else ctx.lineTo(startX, startY)
 
@@ -2526,11 +2592,11 @@ const draw = (
       const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
       guideGradient.addColorStop(
         0,
-        (note.isGold ? goldGuideColor : guideColor) + 'bb'
+        (note.isGold ? goldGuideColor : guideColor) + 'bb',
       )
       guideGradient.addColorStop(
         1,
-        (note.isGold ? goldGuideColor : guideColor) + '33'
+        (note.isGold ? goldGuideColor : guideColor) + '33',
       )
       ctx.fillStyle = guideGradient
     } else {
@@ -2609,11 +2675,11 @@ const draw = (
           -3 + nextNoteOptions.size / 2,
           Math.floor(
             (mouseX - width / 2) / laneWidth +
-              (nextNoteOptions.size % 1 === 0 ? 0.5 : 0)
+              (nextNoteOptions.size % 1 === 0 ? 0.5 : 0),
           ) /
             2 +
-            (nextNoteOptions.size % 1 === 0 ? 0 : 0.25)
-        )
+            (nextNoteOptions.size % 1 === 0 ? 0 : 0.25),
+        ),
       )
 
       if (isPasting) {
@@ -2625,10 +2691,10 @@ const draw = (
         // compute group's current horizontal center (in lane units) so we can
         // position the group such that the mouse sits at the group's center
         const groupLeft = Math.min(
-          ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2)
+          ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2),
         )
         const groupRight = Math.max(
-          ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2)
+          ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2),
         )
         const groupCenter = (groupLeft + groupRight) / 2
         const desiredLaneOffset = rawLaneOffset - groupCenter
