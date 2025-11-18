@@ -1053,47 +1053,93 @@ const draw = (
     return { width: textWidth + 2 * padding, height: textHeight + 2 * padding }
   }
 
+  // Compute minimal horizontal offsets for timeline events so that
+  // overlapping (vertically) events are nudged rightwards just enough to
+  // avoid rectangle intersections. This runs once per draw and caches
+  // results for use by hit-testing and rendering.
+  const computeEventOffsets = () => {
+    const eventTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
+    const events = chartNotes.filter((n) => eventTypes.includes(n.type)) as (
+      | BPMChange
+      | TimeSignature
+      | HiSpeed
+    )[]
+
+    const baseX = width / 2 + laneWidth * 6
+    const spacing = 20
+
+    // placed rects for already-placed events
+    const placed: {
+      top: number
+      bottom: number
+      left: number
+      right: number
+      event: BPMChange | TimeSignature | HiSpeed
+    }[] = []
+
+    // Sort by beat ascending and by type priority for identical beats so
+    // BPMChange gets the smallest offset, then TimeSignature, then HiSpeed.
+    events
+      .slice()
+      .sort((a, b) => {
+        if (a.beat !== b.beat) return a.beat - b.beat
+        const order: Record<string, number> = {
+          BPMChange: 0,
+          TimeSignature: 1,
+          HiSpeed: 2,
+        }
+        return (order[a.type] ?? 99) - (order[b.type] ?? 99)
+      })
+      .forEach((ev) => {
+        const size = getEventSize(ev)
+        const bottom = beatToY(ev.beat)
+        const top = bottom - size.height
+
+        // try offsets starting from `spacing` and push right until no conflicts
+        let offset = spacing
+        while (true) {
+          const left = baseX + offset
+          const right = left + size.width
+
+          // check conflicts with placed rects that vertically overlap
+          let conflict: { r: (typeof placed)[0]; newOffset: number } | null =
+            null
+
+          for (const r of placed) {
+            // vertical overlap?
+            if (bottom < r.top || top > r.bottom) continue
+
+            // horizontal overlap?
+            if (!(right < r.left || left > r.right)) {
+              // bump offset to right edge of this rect + spacing
+              const suggested = r.right - baseX + spacing
+              conflict = { r, newOffset: Math.max(offset + 1, suggested) }
+              break
+            }
+          }
+
+          if (!conflict) {
+            // place it
+            placed.push({ top, bottom, left, right, event: ev })
+            return
+          }
+
+          offset = conflict.newOffset
+        }
+      })
+
+    // convert to map for fast lookup
+    const map = new Map<BPMChange | TimeSignature | HiSpeed, number>()
+    for (const p of placed) map.set(p.event, p.left - baseX)
+    return map
+  }
+
+  let _eventOffsetCache = computeEventOffsets()
+
   const getEventOffset = (
     event: BPMChange | TimeSignature | HiSpeed
   ): number => {
-    let off = 20
-    // return event.type === 'BPMChange'
-    //   ? 40
-    //   : event.type === 'TimeSignature'
-    //   ? 180
-    //   : 250
-
-    const notesBefore = chartNotes
-      .filter((n) => ['BPMChange', 'TimeSignature', 'HiSpeed'].includes(n.type))
-      .filter((n) => {
-        const allTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
-        if (allTypes.indexOf(event.type) - allTypes.indexOf(n.type) < 0)
-          return false
-        return (
-          n.beat <= event.beat &&
-          n.beat >= event.beat - 40 / (BEAT_HEIGHT * zoom)
-        )
-      })
-      .sort((a, b) => {
-        const d = b.beat - a.beat
-
-        if (d === 0) {
-          const allTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
-
-          return allTypes.indexOf(b.type) - allTypes.indexOf(a.type)
-        }
-
-        return d
-      })
-      .filter((n) => n !== event)
-
-    if (notesBefore.length > 0)
-      off +=
-        getEventSize(notesBefore[0] as BPMChange | TimeSignature | HiSpeed)
-          .width +
-        getEventOffset(notesBefore[0] as BPMChange | TimeSignature | HiSpeed)
-
-    return off
+    return _eventOffsetCache.get(event) ?? 20
   }
 
   if (
