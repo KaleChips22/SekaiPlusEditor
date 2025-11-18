@@ -95,7 +95,7 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
     // console.log(globalState)
 
     raf.current = requestAnimationFrame(runDrawLoop)
-  }, [globalState])
+  }, [globalState, sidebarWidth, screenWidth])
 
   return (
     <>
