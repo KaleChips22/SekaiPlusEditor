@@ -1419,30 +1419,53 @@ const draw = (
       break mouseDown
     }
 
-    const notesAtPos = chartNotes.filter((n) => {
-      const clickedLane = getLaneFromMouse(mouseX!)
+    // Filter notes by pixel distance (max 20px in y-direction) and x-position within note bounds
+    const candidateNotes = chartNotes
+      .map((n, index) => {
+        if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
+          const o =
+            width / 2 +
+            laneWidth * 6 +
+            getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
+          const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
+          const b = beatToY(n.beat)
 
-      if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
-        const o =
-          width / 2 +
-          laneWidth * 6 +
-          getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
-        const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
-        const b = beatToY(n.beat)
-        return (
-          mouseX! >= o &&
-          mouseX! <= o + s.width &&
-          mouseY! <= b &&
-          mouseY! >= b - s.height
-        )
-      }
+          // Check if mouse is within the event bounds
+          if (
+            mouseX! >= o &&
+            mouseX! <= o + s.width &&
+            mouseY! <= b &&
+            mouseY! >= b - s.height
+          ) {
+            return { note: n, index, distance: Math.abs(mouseY! - b) }
+          }
+          return null
+        }
 
-      return (
-        n.beat === nearestBeat &&
-        clickedLane <= n.lane + n.size / 2 &&
-        clickedLane >= n.lane - n.size / 2
+        // For regular notes, calculate pixel position
+        const noteY = beatToY(n.beat)
+        const noteX = width / 2 + (n.lane * 2 - n.size) * laneWidth
+        const noteWidth = n.size * 2 * laneWidth
+
+        // Check if mouse x is within note bounds
+        const xInBounds = mouseX! >= noteX && mouseX! <= noteX + noteWidth
+
+        // Check if mouse y is within 20 pixels
+        const yDistance = Math.abs(mouseY! - noteY)
+        const yInRange = yDistance <= 20
+
+        if (xInBounds && yInRange) {
+          return { note: n, index, distance: yDistance }
+        }
+        return null
+      })
+      .filter(
+        (item): item is { note: Note; index: number; distance: number } =>
+          item !== null,
       )
-    })
+      .sort((a, b) => a.distance - b.distance) // Sort by distance, closest first
+
+    const notesAtPos = candidateNotes.map((item) => item.note)
 
     if (
       selectedIndeces.size <= 0 ||
