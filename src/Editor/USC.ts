@@ -37,8 +37,8 @@ export const notesToUSC = (notes: Note[], offset: number) => {
                 n.flickDir === FlickDirection.Default
                   ? 'up'
                   : n.flickDir === FlickDirection.Left
-                  ? 'left'
-                  : 'right',
+                    ? 'left'
+                    : 'right',
             }
           : {}),
       })
@@ -92,15 +92,15 @@ export const notesToUSC = (notes: Note[], offset: number) => {
                   n.type === 'HoldStart'
                     ? 'start'
                     : n.tickType === TickType.Skip
-                    ? 'attach'
-                    : 'tick',
+                      ? 'attach'
+                      : 'tick',
               }),
           beat: n.beat,
           ease,
           lane: n.lane * 2,
           size: n.size,
           timeScaleGroup: 0,
-          ...(n.type === 'HoldStart' || n.tickType === TickType.Normal
+          ...(n.type === 'HoldStart' || n.tickType !== TickType.Hidden
             ? { critical: n.isGold }
             : {}),
           ...(n.type === 'HoldStart'
@@ -129,8 +129,8 @@ export const notesToUSC = (notes: Note[], offset: number) => {
                 n.flickDir === FlickDirection.Right
                   ? 'right'
                   : n.flickDir === FlickDirection.Left
-                  ? 'left'
-                  : 'up',
+                    ? 'left'
+                    : 'up',
             }
           : {}),
       })
@@ -270,8 +270,8 @@ export const USCToNotes = (data: {
               o.type === 'guide'
                 ? o.color === 'yellow'
                 : 'critical' in c
-                ? c.critical
-                : o.critical,
+                  ? c.critical
+                  : o.critical,
             isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
             isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
             flickDir,

@@ -1,6 +1,8 @@
 import { clearHistory, setChartNotes, setMusicOffset } from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
+import { susToUSC } from './SUStoUSC'
+// import { uscToLevelData } from './USCtoLevelData'
 
 let currentFilePath: string | null = null
 const updateCurrentFilePath = (s: string | null) => (currentFilePath = s)
@@ -14,11 +16,17 @@ export const openFile = () => {
     const result = await window.ipcRenderer.openFile()
 
     if (result) {
-      const json = JSON.parse(result.content)
+      let json = {}
+      if (result.filePath.endsWith('.sus')) {
+        json = { usc: susToUSC(result.content) }
+      } else {
+        json = JSON.parse(result.content)
+      }
 
       if ('usc' in json) {
+        console.log(json)
         updateCurrentFilePath(null)
-        const { notes, offset } = USCToNotes(json)
+        const { notes, offset } = USCToNotes(json as any)
 
         setMusicOffset(offset)
         setChartNotes(notes)

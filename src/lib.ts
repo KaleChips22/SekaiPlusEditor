@@ -7,7 +7,7 @@ export const getMenuItemName = (role: string | undefined) =>
     copy: 'Copy',
     paste: 'Paste',
     delete: 'Delete',
-  }[role || ''])
+  })[role || '']
 
 export const getAccelerator = (role: string | undefined) =>
   ({
@@ -17,7 +17,7 @@ export const getAccelerator = (role: string | undefined) =>
     cut: 'CmdOrCtrl+X',
     copy: 'CmdOrCtrl+C',
     paste: 'CmdOrCtrl+V',
-  }[role || ''] || '')
+  })[role || ''] || ''
 
 // mac cmd key character: ⌘
 export const shortcutString = (shortcut: string, isMac: boolean) => {

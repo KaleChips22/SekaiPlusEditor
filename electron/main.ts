@@ -186,6 +186,8 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(() => {
+  getAutoUpdater().checkForUpdatesAndNotify()
+
   createWindow()
 
   // console.log(win !== null && 'webContents' in win)
@@ -224,7 +226,9 @@ app.setName('Sekai Plus Editor')
 ipcMain.handle('show-open-dialog', async () => {
   const result = await dialog.showOpenDialog(win!, {
     properties: ['openFile'],
-    filters: [{ name: 'Sekai Plus Editor Files', extensions: ['pjsk', 'usc'] }],
+    filters: [
+      { name: 'Sekai Plus Editor Files', extensions: ['pjsk', 'usc', 'sus'] },
+    ],
   })
 
   if (!result.canceled && result.filePaths.length > 0) {
@@ -282,6 +286,38 @@ ipcMain.handle('show-settings', () => {
   createSettingsWindow()
 })
 
-app.on('ready', () => {
-  getAutoUpdater().checkForUpdatesAndNotify()
-})
+ipcMain.handle(
+  'export-chart',
+  async (_, uscContent, levelDataContent, defaultName) => {
+    const result = await dialog.showSaveDialog(win!, {
+      defaultPath: defaultName || 'Untitled',
+      filters: [
+        { name: 'USC', extensions: ['.usc'] },
+        { name: 'Level Data', extensions: ['.json.gz'] },
+      ],
+    })
+
+    if (!result.canceled && result.filePath) {
+      try {
+        // Determine which format to export based on file extension
+        const ext = path.extname(result.filePath).toLowerCase()
+        let content: string | Uint8Array<ArrayBuffer>
+
+        if (ext === '.usc') {
+          content = uscContent
+        } else {
+          // Default to levelData for .json or other extensions
+          content = levelDataContent
+        }
+
+        await fs.writeFile(result.filePath, content as any, 'utf-8')
+        return { success: true, filePath: result.filePath }
+      } catch (error) {
+        console.error('Failed to export chart:', error)
+        dialog.showErrorBox('Error', 'Could not export chart.')
+        return { success: false, error: String(error) }
+      }
+    }
+    return { success: false, canceled: true }
+  },
+)

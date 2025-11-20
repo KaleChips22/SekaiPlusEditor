@@ -28,5 +28,15 @@ interface Window {
     saveFileAs: (defaultPath: string | null, content: string) => any
     saveFile: (filePath: string, content: string) => any
     showSettings: () => void
+    exportChart: (
+      uscContent: string,
+      levelDataContent: any,
+      defaultName: string,
+    ) => Promise<{
+      success: boolean
+      filePath?: string
+      error?: string
+      canceled?: boolean
+    }>
   }
 }

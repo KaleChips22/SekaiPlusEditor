@@ -17,6 +17,8 @@ import { getRect } from './noteImage'
 import { notesToPJSK } from './PJSK'
 import { notesToUSC } from './USC'
 import { historyManager } from './history'
+import { USCtoLevelData } from './USCtoLevelData'
+import { uscToLevelData } from './USCtoLD2'
 
 const BEAT_HEIGHT = 220
 
@@ -404,21 +406,38 @@ export const clearHistory = () => {
   console.log('History cleared')
 }
 
-export const exportUSC = () => {
-  const usc = notesToUSC(chartNotes, musicOffsetMs)
+export const exportUSC = async () => {
+  const uscFile = notesToUSC(chartNotes, musicOffsetMs)
+  const uscContent = JSON.stringify(uscFile)
+  const levelData = JSON.stringify(USCtoLevelData(uscFile.usc))
+  // const levelData = JSON.stringify(uscToLevelData(uscFile.usc))
 
-  // console.log(usc)
+  const textEncoder = new TextEncoder()
+  const encodedLevelData = textEncoder.encode(levelData)
 
-  const blob = new Blob([JSON.stringify(usc)], { type: 'application/json' })
+  const readableStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encodedLevelData)
+      controller.close()
+    },
+  })
 
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = (musicScoreName || 'Untitled') + '.usc'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const compressedLevelData = readableStream.pipeThrough(
+    new CompressionStream('gzip'),
+  )
+
+  const compressedBytes = await new Response(compressedLevelData).bytes()
+  // const levelDataArrayBuffer = await compressedBlob.arrayBuffer()
+
+  const result = await window.ipcRenderer.exportChart(
+    uscContent,
+    compressedBytes,
+    musicScoreName || 'Untitled',
+  )
+
+  if (result && !result.success && !result.canceled) {
+    console.error('Failed to export chart:', result.error)
+  }
 }
 
 export const saveAsPJSK = () => {
@@ -1980,13 +1999,15 @@ const draw = (
           ctx.fillStyle = ctx.strokeStyle
           ctx.textBaseline = 'middle'
           // measure number relative to segment start (1-based)
-          const measureIndex = Math.floor(kRelative / measureSubCount) + 1
+          const measureIndex = Math.floor(kRelative / measureSubCount)
           // annotate first measure of a new time signature with the signature text
 
+          ctx.font = '24px Arial'
+          ctx.textAlign = 'right'
           ctx.fillText(
             measureIndex.toString(),
-            width / 2 - 7 * laneWidth - 30,
-            y,
+            width / 2 - 6 * laneWidth - 20,
+            y + 30,
           )
         } else if (isBeatLine) {
           // full beat lines are more visible than subdivisions
@@ -2266,6 +2287,7 @@ const draw = (
         ctx.beginPath()
         ctx.roundRect(x, y + 16, w, h - 32, 4)
 
+        ctx.lineWidth = 3
         ctx.strokeStyle = '#7fffd3'
         if ((n as HoldTick).tickType === TickType.Skip) ctx.strokeStyle = 'cyan'
         ctx.stroke()
