@@ -18,7 +18,6 @@ import { notesToPJSK } from './PJSK'
 import { notesToUSC } from './USC'
 import { historyManager } from './history'
 import { USCtoLevelData } from './USCtoLevelData'
-import { uscToLevelData } from './USCtoLD2'
 
 const BEAT_HEIGHT = 220
 
