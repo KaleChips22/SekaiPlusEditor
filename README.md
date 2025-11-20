@@ -33,6 +33,7 @@ These are my to-dos, in order of priority
 - [x] Undo and redo
 - [X] ~Replace USC export with next sekai level data~ include next sekai level data export
 - [X] Add SUS import
+- [ ] Full context menu
 - [ ] Options Panel
 
 _This is where v1.0 will be released_
@@ -47,3 +48,4 @@ _This is where v1.0 will be released_
   - [ ] Hi Speed Layers
 - [ ] Downwards flick
 - [ ] Other next sekai features?
+
