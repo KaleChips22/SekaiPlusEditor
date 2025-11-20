@@ -1,14 +1,3 @@
-import {
-  USC,
-  USCConnectionAttachNote,
-  USCConnectionEndNote,
-  USCConnectionStartNote,
-  USCConnectionTickNote,
-  USCGuideNote,
-  USCObject,
-  USCSlideNote,
-} from './USCtoLevelData.ts'
-
 type Line = [string, string]
 
 type MeasureChange = [number, number]
@@ -396,9 +385,9 @@ const toRaws = (
 }
 
 /** Convert a SUS to a USC */
-export const susToUSC = (sus: string): USC => chsLikeToUSC(analyze(sus))
+export const susToUSC = (sus: string) => chsLikeToUSC(analyze(sus))
 
-export const chsLikeToUSC = (score: Score): USC => {
+export const chsLikeToUSC = (score: Score) => {
   const flickMods = new Map<string, 'left' | 'up' | 'right'>()
   const traceMods = new Set<string>()
   const criticalMods = new Set<string>()
@@ -408,7 +397,7 @@ export const chsLikeToUSC = (score: Score): USC => {
 
   const preventSingles = new Set<string>()
   const dedupeSingles = new Set<string>()
-  const dedupeSlides = new Map<string, USCSlideNote | USCGuideNote>()
+  const dedupeSlides = new Map<string, any>()
 
   const requests = {
     sideLane: false,
@@ -496,7 +485,7 @@ export const chsLikeToUSC = (score: Score): USC => {
     }
   }
 
-  const objects: USCObject[] = []
+  const objects: any[] = []
 
   for (const timeScaleChanges of score.timeScaleChanges) {
     objects.push({
@@ -557,7 +546,7 @@ export const chsLikeToUSC = (score: Score): USC => {
     if (dedupeSingles.has(key)) continue
     dedupeSingles.add(key)
 
-    let object: USCObject
+    let object: any
     switch (note.type) {
       case 1:
       case 2:
@@ -599,7 +588,7 @@ export const chsLikeToUSC = (score: Score): USC => {
     const startNote = slide.notes.find(({ type }) => type === 1 || type === 2)
     if (!startNote) continue
     const isCritical = criticalMods.has(getKey(startNote))
-    const object: USCSlideNote =
+    const object: any =
       slide.type === 3
         ? {
             type: 'slide',
@@ -631,7 +620,7 @@ export const chsLikeToUSC = (score: Score): USC => {
         case 1: {
           if (object.type == 'guide' || slideStartEndRemoveMods.has(key))
             judgeType = 'none'
-          const connection: USCConnectionStartNote = {
+          const connection: any = {
             type: 'start',
             beat,
             lane,
@@ -649,7 +638,7 @@ export const chsLikeToUSC = (score: Score): USC => {
         case 2: {
           if (object.type == 'guide' || slideStartEndRemoveMods.has(key))
             judgeType = 'none'
-          const connection: USCConnectionEndNote = {
+          const connection: any = {
             type: 'end',
             beat,
             lane,
@@ -668,7 +657,7 @@ export const chsLikeToUSC = (score: Score): USC => {
         }
         case 3: {
           if (tickRemoveMods.has(key)) {
-            const connection: USCConnectionAttachNote = {
+            const connection: any = {
               type: 'attach',
               beat,
               critical,
@@ -679,7 +668,7 @@ export const chsLikeToUSC = (score: Score): USC => {
 
             object.connections.push(connection)
           } else {
-            const connection: USCConnectionTickNote = {
+            const connection: any = {
               type: 'tick',
               beat,
               lane,
@@ -698,7 +687,7 @@ export const chsLikeToUSC = (score: Score): USC => {
         case 5: {
           if (tickRemoveMods.has(key)) break
 
-          const connection: USCConnectionTickNote = {
+          const connection: any = {
             type: 'tick',
             beat,
             lane,
