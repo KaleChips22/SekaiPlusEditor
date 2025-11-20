@@ -30,9 +30,13 @@ These are my to-dos, in order of priority
   - [x] Editor Options
   - [x] Visual Options
   - _NOTE: more options will be added later_
-- [ ] Undo and redo
-- [ ] Replace USC export with next sekai level data
+- [x] Undo and redo
+- [X] ~Replace USC export with next sekai level data~ include next sekai level data export
+- [X] Add SUS import
 - [ ] Options Panel
+
+_This is where v1.0 will be released_
+
 - [ ] Preview Mode
 - [ ] mmw4cc features
   - [ ] Interpolate Hi-speeds (using next sekai hi speed easing)
@@ -40,5 +44,6 @@ These are my to-dos, in order of priority
   - [ ] Damage notes
   - [ ] Colored guides
   - [ ] Note Properties Panel
+  - [ ] Hi Speed Layers
 - [ ] Downwards flick
 - [ ] Other next sekai features?

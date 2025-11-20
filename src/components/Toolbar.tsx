@@ -68,8 +68,8 @@ const ToolBar = ({
         tickIconNum === 0
           ? 'timeline_hold_step_normal'
           : tickIconNum === 1
-          ? 'timeline_hold_step_hidden'
-          : 'timeline_hold_step_skip',
+            ? 'timeline_hold_step_hidden'
+            : 'timeline_hold_step_skip',
       action: () => setSelectedTool(3),
     },
     {
@@ -78,8 +78,8 @@ const ToolBar = ({
         flickIconNum === 0
           ? 'timeline_flick_default'
           : flickIconNum === 1
-          ? 'timeline_flick_left'
-          : 'timeline_flick_right',
+            ? 'timeline_flick_left'
+            : 'timeline_flick_right',
       action: () => setSelectedTool(4),
     },
     {
@@ -148,19 +148,16 @@ const ToolBar = ({
   }, [selectedTool, tickIconNum, flickIconNum])
 
   return (
-    <div className='h-full w-full bg-neutral-800 px-1.5 flex items-center text-white'>
-      <div className='flex gap-1 items-center justify-start w-full h-full'>
+    <div className="h-full w-full bg-neutral-800 px-1.5 flex items-center text-white">
+      <div className="flex gap-1 items-center justify-start w-full h-full">
         {tools.map((tool, index) =>
           tool.type === 'separator' ? (
-            <div
-              key={index}
-              className='h-5 w-[1px] bg-neutral-700'
-            />
+            <div key={index} className="h-5 w-[1px] bg-neutral-700" />
           ) : (
             <div
               className={twMerge(
                 'size-5 hover:bg-neutral-700 rounded-xs overflow-hidden flex items-center justify-center p-0.5',
-                selectedTool + 12 === index && 'bg-accent hover:bg-accent'
+                selectedTool + 12 === index && 'bg-accent hover:bg-accent',
               )}
               onClick={tool.action}
               key={index}
@@ -171,7 +168,7 @@ const ToolBar = ({
                 tool.icon
               )}
             </div>
-          )
+          ),
         )}
       </div>
     </div>

@@ -63,21 +63,18 @@ const App = () => {
   }, [])
 
   return (
-    <div className='w-screen h-screen flex flex-col select-none'>
+    <div className="w-screen h-screen flex flex-col select-none">
       <div
         className={twMerge(
           'flex items-center justify-center',
-          isMac ? '' : 'flex-col'
+          isMac ? '' : 'flex-col',
         )}
         style={{
           height: `${titleBarHeight + (isMac ? 0 : 32)}px`,
         }}
       >
-        <div className='flex flex-1 w-full'>
-          <Titlebar
-            isMac={isMac}
-            isFullscreen={isFullscreen}
-          />
+        <div className="flex flex-1 w-full">
+          <Titlebar isMac={isMac} isFullscreen={isFullscreen} />
           {!isMac && <MenuBar isMac={isMac} />}
         </div>
         <ToolBar
@@ -85,7 +82,7 @@ const App = () => {
           setSelectedTool={setSelectedTool}
         />
       </div>
-      <div className='flex flex-1 h-full'>
+      <div className="flex flex-1 h-full">
         {/* <div className='flex-1'>editor</div> */}
         <Editor globalState={globalState} />
         {/* <EditorFooter /> */}
