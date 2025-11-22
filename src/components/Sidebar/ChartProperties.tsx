@@ -34,13 +34,13 @@ const ChartProperties = () => {
   return (
     <div>
       <div
-        className='bg-neutral-800 px-2 py-0.5 flex gap-2 items-center justify-start mb-1'
+        className="bg-neutral-800 px-2 py-0.5 flex gap-2 items-center justify-start mb-1"
         onClick={() => setMetadataExpanded((p) => !p)}
       >
         <Triangle
           className={twMerge(
             'size-3.5 transition-all',
-            metadataExpanded ? 'rotate-180' : 'rotate-90'
+            metadataExpanded ? 'rotate-180' : 'rotate-90',
           )}
         />
         Metadata
@@ -49,12 +49,12 @@ const ChartProperties = () => {
       <div
         className={twMerge(
           'grid grid-cols-2 gap-x-1 gap-y-1.5 mb-3',
-          !metadataExpanded && 'hidden'
+          !metadataExpanded && 'hidden',
         )}
       >
         <span>Title</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0'
+          className="bg-neutral-800/50 outline-none ring-0"
           value={formData.title}
           onChange={(e) => {
             setFormData({ ...formData, title: e.currentTarget.value })
@@ -63,7 +63,7 @@ const ChartProperties = () => {
         />
         <span>Designer</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0'
+          className="bg-neutral-800/50 outline-none ring-0"
           value={formData.designer}
           onChange={(e) =>
             setFormData({ ...formData, designer: e.currentTarget.value })
@@ -71,7 +71,7 @@ const ChartProperties = () => {
         />
         <span>Artist</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0'
+          className="bg-neutral-800/50 outline-none ring-0"
           value={formData.artist}
           onChange={(e) =>
             setFormData({ ...formData, artist: e.currentTarget.value })
@@ -79,7 +79,7 @@ const ChartProperties = () => {
         />
         <span>Jacket</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0'
+          className="bg-neutral-800/50 outline-none ring-0"
           value={formData.jacket as string}
           onChange={(e) =>
             setFormData({ ...formData, jacket: e.currentTarget.value })
@@ -87,13 +87,13 @@ const ChartProperties = () => {
         />
       </div>
       <div
-        className='bg-neutral-800 px-2 py-0.5 flex gap-2 items-center justify-start mb-1'
+        className="bg-neutral-800 px-2 py-0.5 flex gap-2 items-center justify-start mb-1"
         onClick={() => setAudioExpanded((p) => !p)}
       >
         <Triangle
           className={twMerge(
             'size-3.5 transition-all',
-            audioExpanded ? 'rotate-180' : 'rotate-90'
+            audioExpanded ? 'rotate-180' : 'rotate-90',
           )}
         />
         Audio
@@ -101,14 +101,14 @@ const ChartProperties = () => {
       <div
         className={twMerge(
           'grid grid-cols-2 gap-x-1 gap-y-1.5 mb-3',
-          !audioExpanded && 'hidden'
+          !audioExpanded && 'hidden',
         )}
       >
         <span>Music File</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0 hide-before'
-          type='file'
-          accept='.mp3, .wav'
+          className="bg-neutral-800/50 outline-none ring-0 hide-before"
+          type="file"
+          accept=".mp3, .wav"
           onChange={(e) => {
             const f = e.target.files
             if (f && f.length <= 0) return
@@ -123,11 +123,11 @@ const ChartProperties = () => {
           }}
         />
         <span>Music Offset</span>
-        <div className='flex items-center w-full'>
+        <div className="flex items-center w-full">
           <input
-            className='bg-neutral-800/50 outline-none ring-0 text-center w-full flex-1'
+            className="bg-neutral-800/50 outline-none ring-0 text-center w-full flex-1"
             value={`${formData.musicOffset} ms`}
-            type='text'
+            type="text"
             // No min/max attributes so value is unbounded
             onChange={(e) => {
               const raw = e.currentTarget.value
@@ -155,7 +155,7 @@ const ChartProperties = () => {
               const sensitivity = e.shiftKey ? 0.1 : e.altKey ? 10 : 1
               const delta = e.clientX - dragStartX.current
               const newVal = Math.round(
-                (dragStartValue.current + delta * sensitivity) * 1
+                (dragStartValue.current + delta * sensitivity) * 1,
               ) // ms integer
               setFormData((prev) => ({ ...prev, musicOffset: newVal }))
               setMusicOffset(newVal)
@@ -175,13 +175,13 @@ const ChartProperties = () => {
         </div>
         <span>Master Volume</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0 slider'
+          className="bg-neutral-800/50 outline-none ring-0 slider"
           value={formData.masterVolume}
-          type='range'
+          type="range"
           min={0}
           max={100}
           step={0.1}
-          data-suffix='%'
+          data-suffix="%"
           onChange={(e) =>
             setFormData({
               ...formData,
@@ -191,13 +191,13 @@ const ChartProperties = () => {
         />
         <span>BGM Volume</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0 slider'
+          className="bg-neutral-800/50 outline-none ring-0 slider"
           value={formData.BGMVolume}
-          type='range'
+          type="range"
           min={0}
           max={100}
           step={0.1}
-          data-suffix='%'
+          data-suffix="%"
           onChange={(e) =>
             setFormData({
               ...formData,
@@ -207,13 +207,13 @@ const ChartProperties = () => {
         />
         <span>SE Volume</span>
         <input
-          className='bg-neutral-800/50 outline-none ring-0 slider'
+          className="bg-neutral-800/50 outline-none ring-0 slider"
           value={formData.SEVolume}
-          type='range'
+          type="range"
           min={0}
           max={100}
           step={0.1}
-          data-suffix='%'
+          data-suffix="%"
           onChange={(e) =>
             setFormData({
               ...formData,

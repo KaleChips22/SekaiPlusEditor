@@ -1,4 +1,4 @@
-import { globalState } from '../lib'
+import type { globalState } from '../lib'
 import { saveFile, saveFileAs } from './fileOps'
 import {
   BPMChange,
@@ -162,12 +162,16 @@ export const setMusic = (file: File) => {
   try {
     musicPlayer.pause()
     musicPlayer.currentTime = 0
-  } catch (e) {}
+  } catch (e) {
+    throw new Error('Error: ' + e)
+  }
 
   if (currentMusicUrl) {
     try {
       URL.revokeObjectURL(currentMusicUrl)
-    } catch (e) {}
+    } catch (e) {
+      throw new Error('Error: ' + e)
+    }
     currentMusicUrl = null
   }
 
@@ -187,13 +191,17 @@ export const setMusic = (file: File) => {
       if (musicPlayer.duration && !isNaN(musicPlayer.duration)) {
         startTime = Math.min(startTime, musicPlayer.duration)
       }
-    } catch (e) {}
+    } catch (e) {
+      throw new Error('Error: ' + e)
+    }
 
     try {
       musicPlayer.currentTime = startTime
       // re-trigger play; browsers may require user gesture but this mirrors toggleIsPlaying behavior
       void musicPlayer.play()
-    } catch (e) {}
+    } catch (e) {
+      throw new Error('Error: ' + e)
+    }
   }
 
   const loadBytes = async () => {
@@ -974,10 +982,6 @@ const getTsig = (beat: number) => {
   }
 }
 
-/**
- *
- * @returns time elapsed in seconds
- */
 const getTime = (beat: number) => {
   let time = 0
   const changes = chartNotes.filter(
@@ -1003,218 +1007,903 @@ const guideColor = '#38e584'
 const goldGuideColor = '#ffcd36'
 
 let lastTime: number
+const globalState: globalState = {
+  division: 16,
+  selectedTool: 0,
+  zoom: 1,
+}
 
-const draw = (
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  globalState: globalState,
-  timeStamp: number,
-) => {
-  if (lastTime == undefined) {
-    lastTime = timeStamp
+let width = 100,
+  height = 100
+export const setWidth = (w: number) => (width = w)
+export const setHeight = (h: number) => (height = h)
+
+export let ctx: CanvasRenderingContext2D | null = null
+
+export const setCtx = (c: CanvasRenderingContext2D) => (ctx = c)
+export const setGlobalState = (g: Partial<globalState>) => {
+  Object.entries(g).forEach(
+    ([k, v]) => (globalState[k as keyof globalState] = v),
+  )
+}
+
+const buildSegments = () => {
+  const tsEvents = chartNotes
+    .filter((n) => n.type === 'TimeSignature')
+    .sort((a, b) => a.beat - b.beat) as TimeSignature[]
+
+  if (tsEvents.length === 0 || tsEvents[0].beat !== 0) {
+    tsEvents.unshift({
+      type: 'TimeSignature',
+      beat: 0,
+      size: 0,
+      lane: 0,
+      top: 4,
+      bottom: 4,
+    } as TimeSignature)
   }
 
-  const deltaTime = timeStamp - lastTime
-
-  const { zoom, division, selectedTool } = globalState
-
-  // Build time-signature segments (used by both mapping helpers and drawDivisions)
-  const buildSegments = () => {
-    const tsEvents = chartNotes
-      .filter((n) => n.type === 'TimeSignature')
-      .sort((a, b) => a.beat - b.beat) as TimeSignature[]
-
-    if (tsEvents.length === 0 || tsEvents[0].beat !== 0) {
-      tsEvents.unshift({
-        type: 'TimeSignature',
-        beat: 0,
-        size: 0,
-        lane: 0,
-        top: 4,
-        bottom: 4,
-      } as TimeSignature)
-    }
-
-    const segs: { start: number; end: number; top: number; bottom: number }[] =
-      []
-    for (let i = 0; i < tsEvents.length; i++) {
-      const start = tsEvents[i].beat
-      const end = i + 1 < tsEvents.length ? tsEvents[i + 1].beat : Infinity
-      segs.push({
-        start,
-        end,
-        top: tsEvents[i].top,
-        bottom: tsEvents[i].bottom,
-      })
-    }
-
-    return segs
+  const segs: { start: number; end: number; top: number; bottom: number }[] = []
+  for (let i = 0; i < tsEvents.length; i++) {
+    const start = tsEvents[i].beat
+    const end = i + 1 < tsEvents.length ? tsEvents[i + 1].beat : Infinity
+    segs.push({
+      start,
+      end,
+      top: tsEvents[i].top,
+      bottom: tsEvents[i].bottom,
+    })
   }
 
-  const segments = buildSegments()
+  return segs
+}
 
-  const getBeatFromMouse = (mouseY: number): number => {
-    // Use a constant pixels-per-beat; beats always have the same height.
-    const ppb = BEAT_HEIGHT * zoom
-    // pixels from beat 0 measured downwards
-    const pixelsFromZero = yOffset + height - mouseY
+const getBeatFromMouse = (mouseY: number): number => {
+  // Use a constant pixels-per-beat; beats always have the same height.
+  const ppb = BEAT_HEIGHT * globalState.zoom
+  // pixels from beat 0 measured downwards
+  const pixelsFromZero = yOffset + height - mouseY
 
-    if (pixelsFromZero <= 0) return 0
+  if (pixelsFromZero <= 0) return 0
 
-    const beat = pixelsFromZero / ppb
-    return Math.max(0, beat)
-  }
-  //   let beat = 0
-  //   let off = 0
-  //   while (off < yOffset) {
-  //     // const { bottom: tSigBottom } = getTsig(beat)
-  //     off += (BEAT_HEIGHT * zoom * 4) / division
-  //     beat += 4 / division
-  //   }
+  const beat = pixelsFromZero / ppb
+  return Math.max(0, beat)
+}
 
-  //   // if (off - yOffset !== 0 && yOffset > 0) {
-  //   //   beat -= (off - yOffset) / (BEAT_HEIGHT * zoom)
-  //   // }
+const beatToY = (beat: number): number => {
+  const ppb = BEAT_HEIGHT * globalState.zoom
+  const pixelsFromZero = Math.max(0, beat) * ppb
+  return height + yOffset - pixelsFromZero
+}
 
-  //   return beat
-  // }
+const getPixelsFromZero = (beat: number): number => {
+  const ppb = BEAT_HEIGHT * globalState.zoom
+  return Math.max(0, beat) * ppb
+}
 
-  const beatToY = (beat: number): number => {
-    const ppb = BEAT_HEIGHT * zoom
-    const pixelsFromZero = Math.max(0, beat) * ppb
-    return height + yOffset - pixelsFromZero
-  }
+const getLaneFromMouse = (mouseX: number): number =>
+  Math.round(
+    Math.max(-3, Math.min(3, (mouseX - width / 2) / (laneWidth * 2))) * 2,
+  ) / 2
 
-  const getPixelsFromZero = (beat: number): number => {
-    const ppb = BEAT_HEIGHT * zoom
-    return Math.max(0, beat) * ppb
-  }
+const getNearestDivision = (beat: number): number => {
+  // subdivisions per quarter-beat (keep beat unit as quarter notes)
+  const divisionsPerQuarter = globalState.division / 4
+  return Math.round(beat * divisionsPerQuarter) / divisionsPerQuarter
+}
 
-  const getLaneFromMouse = (mouseX: number): number =>
-    Math.round(
-      Math.max(-3, Math.min(3, (mouseX - width / 2) / (laneWidth * 2))) * 2,
-    ) / 2
+const getEventSize = (
+  event: BPMChange | TimeSignature | HiSpeed,
+): { width: number; height: number } => {
+  const fontSize = '24px'
+  const fontFamily = 'Arial'
 
-  const getNearestDivision = (beat: number): number => {
-    // subdivisions per quarter-beat (keep beat unit as quarter notes)
-    const divisionsPerQuarter = division / 4
-    return Math.round(beat * divisionsPerQuarter) / divisionsPerQuarter
-  }
+  const textEl = document.createElement('p')
+  textEl.style.fontSize = fontSize
+  textEl.style.fontFamily = fontFamily
+  textEl.style.display = 'inline'
+  textEl.innerText =
+    event.type === 'HiSpeed'
+      ? `${(event as HiSpeed).speed}x`
+      : event.type === 'BPMChange'
+        ? `${(event as BPMChange).BPM} BPM`
+        : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
+  document.body.appendChild(textEl)
+  const { width: textWidth, height: textHeight } =
+    textEl.getBoundingClientRect()
+  textEl.remove()
+  const padding = 8
 
-  const getEventSize = (
-    event: BPMChange | TimeSignature | HiSpeed,
-  ): { width: number; height: number } => {
-    const fontSize = '24px'
-    const fontFamily = 'Arial'
+  return { width: textWidth + 2 * padding, height: textHeight + 2 * padding }
+}
 
-    const textEl = document.createElement('p')
-    textEl.style.fontSize = fontSize
-    textEl.style.fontFamily = fontFamily
-    textEl.style.display = 'inline'
-    textEl.innerText =
-      event.type === 'HiSpeed'
-        ? `${(event as HiSpeed).speed}x`
-        : event.type === 'BPMChange'
-          ? `${(event as BPMChange).BPM} BPM`
-          : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
-    document.body.appendChild(textEl)
-    const { width: textWidth, height: textHeight } =
-      textEl.getBoundingClientRect()
-    textEl.remove()
-    const padding = 8
-
-    return { width: textWidth + 2 * padding, height: textHeight + 2 * padding }
-  }
-
+const computeEventOffsets = () => {
   // Compute minimal horizontal offsets for timeline events so that
   // overlapping (vertically) events are nudged rightwards just enough to
   // avoid rectangle intersections. This runs once per draw and caches
   // results for use by hit-testing and rendering.
-  const computeEventOffsets = () => {
-    const eventTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
-    const events = chartNotes.filter((n) => eventTypes.includes(n.type)) as (
-      | BPMChange
-      | TimeSignature
-      | HiSpeed
-    )[]
+  const eventTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
+  const events = chartNotes.filter((n) => eventTypes.includes(n.type)) as (
+    | BPMChange
+    | TimeSignature
+    | HiSpeed
+  )[]
 
-    const baseX = width / 2 + laneWidth * 6
-    const spacing = 20
+  const baseX = width / 2 + laneWidth * 6
+  const spacing = 20
 
-    // placed rects for already-placed events
-    const placed: {
-      top: number
-      bottom: number
-      left: number
-      right: number
-      event: BPMChange | TimeSignature | HiSpeed
-    }[] = []
+  // placed rects for already-placed events
+  const placed: {
+    top: number
+    bottom: number
+    left: number
+    right: number
+    event: BPMChange | TimeSignature | HiSpeed
+  }[] = []
 
-    // Sort by beat ascending and by type priority for identical beats so
-    // BPMChange gets the smallest offset, then TimeSignature, then HiSpeed.
-    events
-      .slice()
-      .sort((a, b) => {
-        if (a.beat !== b.beat) return a.beat - b.beat
-        const order: Record<string, number> = {
-          BPMChange: 0,
-          TimeSignature: 1,
-          HiSpeed: 2,
-        }
-        return (order[a.type] ?? 99) - (order[b.type] ?? 99)
-      })
-      .forEach((ev) => {
-        const size = getEventSize(ev)
-        const bottom = beatToY(ev.beat)
-        const top = bottom - size.height
+  // Sort by beat ascending and by type priority for identical beats so
+  // BPMChange gets the smallest offset, then TimeSignature, then HiSpeed.
+  events
+    .slice()
+    .sort((a, b) => {
+      if (a.beat !== b.beat) return a.beat - b.beat
+      const order: Record<string, number> = {
+        BPMChange: 0,
+        TimeSignature: 1,
+        HiSpeed: 2,
+      }
+      return (order[a.type] ?? 99) - (order[b.type] ?? 99)
+    })
+    .forEach((ev) => {
+      const size = getEventSize(ev)
+      const bottom = beatToY(ev.beat)
+      const top = bottom - size.height
 
-        // try offsets starting from `spacing` and push right until no conflicts
-        let offset = spacing
-        while (true) {
-          const left = baseX + offset
-          const right = left + size.width
+      // try offsets starting from `spacing` and push right until no conflicts
+      let offset = spacing
+      for (let maxIterations = 0; maxIterations < 120; maxIterations++) {
+        const left = baseX + offset
+        const right = left + size.width
 
-          // check conflicts with placed rects that vertically overlap
-          let conflict: { r: (typeof placed)[0]; newOffset: number } | null =
-            null
+        // check conflicts with placed rects that vertically overlap
+        let conflict: { r: (typeof placed)[0]; newOffset: number } | null = null
 
-          for (const r of placed) {
-            // vertical overlap?
-            if (bottom < r.top || top > r.bottom) continue
+        for (const r of placed) {
+          // vertical overlap?
+          if (bottom < r.top || top > r.bottom) continue
 
-            // horizontal overlap?
-            if (!(right < r.left || left > r.right)) {
-              // bump offset to right edge of this rect + spacing
-              const suggested = r.right - baseX + spacing
-              conflict = { r, newOffset: Math.max(offset + 1, suggested) }
-              break
-            }
+          // horizontal overlap?
+          if (!(right < r.left || left > r.right)) {
+            // bump offset to right edge of this rect + spacing
+            const suggested = r.right - baseX + spacing
+            conflict = { r, newOffset: Math.max(offset + 1, suggested) }
+            break
           }
-
-          if (!conflict) {
-            // place it
-            placed.push({ top, bottom, left, right, event: ev })
-            return
-          }
-
-          offset = conflict.newOffset
         }
-      })
 
-    // convert to map for fast lookup
-    const map = new Map<BPMChange | TimeSignature | HiSpeed, number>()
-    for (const p of placed) map.set(p.event, p.left - baseX)
-    return map
+        if (!conflict) {
+          // place it
+          placed.push({ top, bottom, left, right, event: ev })
+          return
+        }
+
+        offset = conflict.newOffset
+      }
+    })
+
+  // convert to map for fast lookup
+  const map = new Map<BPMChange | TimeSignature | HiSpeed, number>()
+  for (const p of placed) map.set(p.event, p.left - baseX)
+  return map
+}
+
+let _eventOffsetCache = computeEventOffsets()
+export const updateOffsetCache = () =>
+  (_eventOffsetCache = computeEventOffsets())
+
+const getEventOffset = (event: BPMChange | TimeSignature | HiSpeed): number => {
+  return _eventOffsetCache.get(event) ?? 20
+}
+
+const drawLanes = () => {
+  if (ctx === null) return
+
+  ctx.fillStyle = '#2229'
+  ctx.fillRect(width / 2 - 6 * laneWidth, 0, 12 * laneWidth, height)
+
+  ctx.beginPath()
+  for (let i = 0; i < 13; i += 2) {
+    const xOff = width / 2 + laneWidth * (i - 6)
+    ctx.moveTo(xOff, 0)
+    ctx.lineTo(xOff, height)
+  }
+  ctx.strokeStyle = '#bbbb'
+  ctx.lineWidth = 3
+  ctx.stroke()
+
+  ctx.beginPath()
+  for (let i = 1; i < 13; i += 2) {
+    const xOff = width / 2 + laneWidth * (i - 6)
+    ctx.moveTo(xOff, 0)
+    ctx.lineTo(xOff, height)
+  }
+  ctx.strokeStyle = '#888b'
+  ctx.lineWidth = 2
+  ctx.stroke()
+}
+
+const drawDivisions = (
+  segments: { start: number; end: number; top: number; bottom: number }[],
+) => {
+  if (ctx === null) return
+  // Draw division lines by iterating subdivision indices per time-signature segment.
+  // This avoids floating-point accumulation by using integer subdivision indices (k).
+
+  // visible beat range (bottom -> top)
+  const visibleMinBeat = getBeatFromMouse(height)
+  const visibleMaxBeat = getBeatFromMouse(0)
+
+  // use prebuilt `segments` (constructed above) which already contains
+  // contiguous time-signature segments starting at beat 0
+
+  // iterate segments that overlap visible range
+  for (const seg of segments) {
+    const segStart = Math.max(seg.start, visibleMinBeat)
+    const segEnd = Math.min(seg.end, visibleMaxBeat)
+    if (!(segStart <= segEnd)) continue
+
+    // subdivisions per quarter-beat (keep beat unit as quarter notes)
+    const subsPerBeat = globalState.division / 4
+
+    // integer subdivision indices that lie in this segment
+    const kStart = Math.ceil(segStart * subsPerBeat - 1e-9)
+    const kEnd = Math.floor(segEnd * subsPerBeat + 1e-9)
+
+    // measure width in subdivisions: division * top / bottom
+    const measureSubCount = Math.round(
+      (globalState.division * seg.top) / seg.bottom,
+    )
+
+    // offset in subdivision units where this segment starts (so kRelative resets to 0 at segment start)
+    const segOffsetK = Math.round(seg.start * subsPerBeat)
+
+    for (let k = kStart; k <= kEnd; k++) {
+      const beat = k / subsPerBeat
+      // round beat to avoid tiny FP noise when rendering/labeling
+      const beatRounded = Math.round((beat + Number.EPSILON) * 1e9) / 1e9
+      const y = beatToY(beatRounded)
+      if (y < -10 || y > height + 10) continue
+
+      ctx.beginPath()
+
+      const kRelative = k - segOffsetK
+      const isMeasureLine =
+        measureSubCount > 0 &&
+        kRelative >= 0 &&
+        kRelative % measureSubCount === 0
+
+      // determine whether this line falls exactly on a beat according to the time-signature bottom
+      // use kRelative (subdivision index relative to segment start) so beat lines reset per segment
+      // beatTimesFactor = kRelative * seg.bottom / division -> integer when on a beat
+      const beatTimesFactor = (kRelative * seg.bottom) / globalState.division
+      const isBeatLine =
+        kRelative >= 0 &&
+        Math.abs(Math.round(beatTimesFactor) - beatTimesFactor) < 1e-9
+
+      if (isMeasureLine) {
+        ctx.moveTo(width / 2 - 7 * laneWidth, y)
+        ctx.lineTo(width / 2 + 7 * laneWidth, y)
+        ctx.strokeStyle = 'rgba(220,220,220,0.95)'
+        ctx.lineWidth = 3
+        ctx.stroke()
+
+        ctx.fillStyle = ctx.strokeStyle
+        ctx.textBaseline = 'middle'
+        // measure number relative to segment start (1-based)
+        const measureIndex = Math.floor(kRelative / measureSubCount)
+        // annotate first measure of a new time signature with the signature text
+
+        ctx.font = '24px Arial'
+        ctx.textAlign = 'right'
+        ctx.fillText(
+          measureIndex.toString(),
+          width / 2 - 6 * laneWidth - 20,
+          y + 30,
+        )
+      } else if (isBeatLine) {
+        // full beat lines are more visible than subdivisions
+        ctx.moveTo(width / 2 - 6 * laneWidth, y)
+        ctx.lineTo(width / 2 + 6 * laneWidth, y)
+        ctx.strokeStyle = 'rgba(221,221,221,0.75)'
+        ctx.lineWidth = 2
+        ctx.stroke()
+      } else {
+        // subdivisions should be faint
+        ctx.moveTo(width / 2 - 6 * laneWidth, y)
+        ctx.lineTo(width / 2 + 6 * laneWidth, y)
+        ctx.strokeStyle = 'rgba(119,119,119,0.67)'
+        ctx.lineWidth = 1
+        ctx.stroke()
+      }
+    }
+  }
+}
+
+const drawWaveform = () => {
+  if (ctx === null) return
+
+  if (!waveformReady || !waveform || waveform.length === 0) return
+
+  // visible beat range (bottom -> top)
+  const visibleMinBeat = getBeatFromMouse(height)
+  const visibleMaxBeat = getBeatFromMouse(0)
+
+  if (visibleMaxBeat <= visibleMinBeat) return
+
+  const leftEdge = width / 2 - 6 * laneWidth
+  const rightEdge = width / 2 + 6 * laneWidth
+  const centerX = (leftEdge + rightEdge) / 2
+  const maxHalfWidth = (rightEdge - leftEdge) / 2 - 6 // small padding
+
+  const leftPoints: { x: number; y: number }[] = []
+  const rightPoints: { x: number; y: number }[] = []
+
+  // sample every N pixels vertically to keep it fast
+  const step = Math.max(1, Math.floor(window.devicePixelRatio)) * 2
+
+  for (let y = 0; y <= height; y += step) {
+    const beat = getBeatFromMouse(y)
+
+    // map beat -> time in seconds using chart BPM map
+    const timeSec = getTime(beat)
+
+    // apply music offset (ms -> seconds)
+    const offsetSec = (musicOffsetMs ?? 0) / 1000
+    const adjustedTime = timeSec - offsetSec
+
+    const t = waveformDuration > 0 ? adjustedTime / waveformDuration : 0
+
+    let amp = 0
+    if (t >= 0 && t <= 1) {
+      const idx = Math.floor(t * (waveform.length - 1))
+      amp = waveform[idx] ?? 0
+    }
+
+    const halfW = amp * maxHalfWidth
+
+    leftPoints.push({ x: centerX - halfW, y })
+    rightPoints.push({ x: centerX + halfW, y })
   }
 
-  let _eventOffsetCache = computeEventOffsets()
-
-  const getEventOffset = (
-    event: BPMChange | TimeSignature | HiSpeed,
-  ): number => {
-    return _eventOffsetCache.get(event) ?? 20
+  // draw filled waveform (left side top->bottom, right side bottom->top)
+  ctx.beginPath()
+  // left side
+  for (let i = 0; i < leftPoints.length; i++) {
+    const p = leftPoints[i]
+    if (i === 0) ctx.moveTo(p.x, p.y)
+    else ctx.lineTo(p.x, p.y)
   }
+
+  // right side (reverse)
+  for (let i = rightPoints.length - 1; i >= 0; i--) {
+    const p = rightPoints[i]
+    ctx.lineTo(p.x, p.y)
+  }
+
+  ctx.closePath()
+
+  // gradient fill to match guide style
+  // const grad = ctx.createLinearGradient(0, 0, 0, height)
+  // grad.addColorStop(0, guideColor + '66')
+  // grad.addColorStop(1, guideColor + '11')
+  // ctx.fillStyle = grad
+  ctx.fillStyle = '#bbb3'
+  ctx.fill()
+}
+
+const getNoteImageName = (n: Note): string => {
+  let noteImageName = 'notes_2'
+  if (n.type === 'HoldTick') return 'tick'
+  else if (n.type === 'Tap') {
+    const note = n as TapNote
+
+    if (note.isTrace) {
+      if (note.isGold) noteImageName = 'notes_5'
+      else if (note.flickDir !== FlickDirection.None) noteImageName = 'notes_6'
+      else noteImageName = 'notes_4'
+    } else if (note.isGold) noteImageName = 'notes_0'
+    else if (note.flickDir !== FlickDirection.None) noteImageName = 'notes_3'
+  } else if (n.type === 'HoldStart' || n.type === 'HoldEnd') {
+    const note = n as HoldStart | HoldEnd
+    if (note.isHidden) return 'hidden'
+    if (note.isTrace) {
+      if (note.isGold) noteImageName = 'notes_5'
+      else if (note.type === 'HoldEnd' && note.flickDir !== FlickDirection.None)
+        noteImageName = 'notes_6'
+      else noteImageName = 'notes_4'
+    } else if (note.isGold) noteImageName = 'notes_0'
+    else if (note.type === 'HoldEnd' && note.flickDir !== FlickDirection.None)
+      noteImageName = 'notes_3'
+    else noteImageName = 'notes_1'
+  } else {
+    return 'none'
+  }
+
+  return noteImageName
+}
+
+const drawNote = (n: Note) => {
+  if (ctx === null) return
+
+  const { lane, beat, size } = n
+
+  if (n.type === 'HiSpeed') {
+    const note = n as HiSpeed
+    const y = beatToY(beat)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    const startX = getEventOffset(note)
+
+    ctx.beginPath()
+    ctx.moveTo(lanesEdge, y)
+    ctx.lineTo(lanesEdge + startX + 4, y)
+    ctx.strokeStyle = 'red'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(note)))
+      ctx.strokeStyle = '#ff4444'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(note)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = 'red'
+    if (selectedIndeces.has(chartNotes.indexOf(note))) ctx.fillStyle = '#ff4444'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(`${note.speed}x`, lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'TimeSignature') {
+    const note = n as TimeSignature
+    const y = beatToY(beat)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    const startX = getEventOffset(note)
+
+    ctx.beginPath()
+    ctx.moveTo(lanesEdge, y)
+    ctx.lineTo(lanesEdge + startX + 4, y)
+    ctx.strokeStyle = 'yellow'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(note)))
+      ctx.strokeStyle = '#ffff99'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(note)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = 'yellow'
+    if (selectedIndeces.has(chartNotes.indexOf(note))) ctx.fillStyle = '#ffff99'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(`${note.top}/${note.bottom}`, lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'BPMChange') {
+    const note = n as BPMChange
+    const y = beatToY(beat)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    const startX = getEventOffset(note)
+
+    ctx.beginPath()
+    ctx.moveTo(lanesEdge, y)
+    ctx.lineTo(lanesEdge + startX + 4, y)
+    ctx.strokeStyle = 'lime'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(note)))
+      ctx.strokeStyle = '#99ff99'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(note)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = 'lime'
+    if (selectedIndeces.has(chartNotes.indexOf(note))) ctx.fillStyle = '#99ff99'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(note.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
+
+    return
+  }
+
+  let aspectRatio = 4
+
+  const x = width / 2 + (lane * 2 - size) * laneWidth
+  const w = size * 2 * laneWidth
+  const y = beatToY(beat) - NOTE_HEIGHT / 2
+  const h = NOTE_HEIGHT
+
+  if (n.type === 'HoldTick') {
+    if (!hideTickOutlines && !(hideTickOutlinesOnPlay && isPlaying)) {
+      ctx.beginPath()
+      ctx.roundRect(x, y + 16, w, h - 32, 4)
+
+      ctx.lineWidth = 3
+      ctx.strokeStyle = '#7fffd3'
+      if ((n as HoldTick).tickType === TickType.Skip) ctx.strokeStyle = 'cyan'
+      ctx.stroke()
+    }
+  } else {
+    const noteImageName = getNoteImageName(n)
+    if (noteImageName === 'none') return
+    else if (noteImageName === 'hidden') {
+      ctx.beginPath()
+      ctx.roundRect(x, y + 16, w, h - 32, 4)
+
+      ctx.fillStyle = guideColor
+      if ((n as HoldStart).isGold) ctx.fillStyle = goldGuideColor
+      ctx.strokeStyle = 'white'
+      ctx.lineWidth = 3
+      ctx.fill()
+      ctx.stroke()
+      return
+    }
+
+    const rect = getRect(noteImageName)!
+
+    const edgeSize = NOTE_HEIGHT
+    aspectRatio = rect.h / NOTE_HEIGHT
+
+    const x1 = x - 15
+    const w1 = edgeSize
+
+    const x3 = x + w - NOTE_HEIGHT + 15
+    const w3 = w1
+
+    const x2 = x1 + w1 //- 1
+    const w2 = Math.abs(x1 - x3) - w1 //+ 2
+
+    // first part
+    ctx.drawImage(
+      imageSource,
+      rect.x,
+      rect.y,
+      w1 * aspectRatio,
+      rect.h,
+      x1,
+      y,
+      w1,
+      h,
+    )
+
+    // last part
+    ctx.drawImage(
+      imageSource,
+      rect.x + rect.w - w1 * aspectRatio,
+      rect.y,
+      w1 * aspectRatio,
+      rect.h,
+      x3,
+      y,
+      w3,
+      h,
+    )
+
+    // middle part
+    ctx.drawImage(
+      imageSource,
+      rect.x + edgeSize * aspectRatio,
+      rect.y,
+      rect.w - w1 * aspectRatio * 2,
+      rect.h,
+      x2,
+      y,
+      w2,
+      h,
+    )
+  }
+
+  if (
+    n.type === 'Tap' ||
+    n.type === 'HoldStart' ||
+    n.type === 'HoldEnd' ||
+    n.type === 'HoldTick'
+  ) {
+    let note: TapNote | HoldEnd
+    if (n.type === 'Tap') note = n as TapNote
+    else note = n as HoldEnd
+
+    if (
+      note.isTrace ||
+      ((note as any).type === 'HoldTick' &&
+        (note as any).tickType !== TickType.Hidden)
+    ) {
+      let traceSpriteName = 'notes_friction_among_'
+      if (note.isGold) traceSpriteName += 'crtcl'
+      else if (
+        !['HoldStart', 'HoldTick'].includes((note as any).type) &&
+        note.flickDir !== FlickDirection.None
+      )
+        traceSpriteName += 'flick'
+      else traceSpriteName += 'long'
+
+      const traceRect = getRect(traceSpriteName)!
+
+      const tw = (1.75 * traceRect.w) / aspectRatio
+      const th = (1.75 * traceRect.h) / aspectRatio
+      let tx = (width - tw) / 2 + lane * 2 * laneWidth
+
+      if (
+        (note as any).type === 'HoldTick' &&
+        (note as any).tickType === TickType.Skip
+      ) {
+        const n = note as any as HoldTick
+        let pN = n.prevNode
+        let nN = n.nextNode
+
+        while ('prevNode' in pN && pN.tickType === TickType.Skip)
+          pN = pN.prevNode
+
+        while ('nextNode' in nN && nN.tickType === TickType.Skip)
+          nN = nN.nextNode
+
+        const percentY = (n.beat - pN.beat) / (nN.beat - pN.beat)
+        const easedY =
+          pN.easingType === EasingType.EaseIn
+            ? Math.pow(percentY, 2)
+            : pN.easingType === EasingType.EaseOut
+              ? 1 - Math.pow(1 - percentY, 2)
+              : percentY
+        tx =
+          (width - tw) / 2 +
+          ((1 - easedY) * pN.lane + easedY * nN.lane) * 2 * laneWidth
+      }
+
+      const ty = y - NOTE_HEIGHT / 20
+
+      ctx.drawImage(
+        imageSource,
+        traceRect.x,
+        traceRect.y,
+        traceRect.w,
+        traceRect.h,
+        tx,
+        ty,
+        tw,
+        th,
+      )
+    }
+  }
+}
+
+const drawFlickArrow = (n: Note) => {
+  if (ctx === null) return
+
+  const { lane, beat } = n
+
+  const noteImageName = getNoteImageName(n)
+
+  const rect = getRect(noteImageName)!
+  if (['none', 'tick', 'hidden'].includes(noteImageName)) return
+
+  const aspectRatio = rect.h / NOTE_HEIGHT
+
+  const y = beatToY(beat) - NOTE_HEIGHT / 2
+
+  if (n.type === 'Tap' || n.type === 'HoldEnd') {
+    let note: TapNote | HoldEnd
+    if (n.type === 'Tap') note = n as TapNote
+    else note = n as HoldEnd
+    if (note.flickDir !== FlickDirection.None) {
+      let flickSpriteName = 'notes_flick_arrow_'
+      if (note.isGold) flickSpriteName += 'crtcl_'
+      flickSpriteName += '0' + Math.min(6, n.size * 2)
+      if (note.flickDir !== FlickDirection.Default)
+        flickSpriteName += '_diagonal'
+
+      const flickRect = getRect(flickSpriteName)!
+
+      let fw = (1.25 * flickRect.w) / aspectRatio
+      const fh = (1.25 * flickRect.h) / aspectRatio
+      let fx = (width - fw) / 2 + lane * 2 * laneWidth
+      const fy = y - fh
+
+      if (note.flickDir === FlickDirection.Right) {
+        ctx.scale(-1, 1)
+        fw *= -1
+        fx *= -1
+      }
+
+      ctx.drawImage(
+        imageSource,
+        flickRect.x,
+        flickRect.y,
+        flickRect.w,
+        flickRect.h,
+        fx,
+        fy,
+        fw,
+        fh,
+      )
+
+      if (note.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
+    }
+  }
+}
+
+const drawSelectionOutline = (n: Note) => {
+  if (ctx === null) return
+  if (['HiSpeed', 'TimeSignature', 'BPMChange'].includes(n.type)) return
+
+  const selectionOutlinePadding = 8
+
+  const { lane, beat, size } = n
+
+  const x = width / 2 + (lane * 2 - size) * laneWidth - selectionOutlinePadding
+  const w = size * 2 * laneWidth + 2 * selectionOutlinePadding
+  const y = beatToY(beat) - NOTE_HEIGHT / 2 + selectionOutlinePadding / 2
+  const h = NOTE_HEIGHT - selectionOutlinePadding
+
+  ctx.beginPath()
+  ctx.roundRect(x, y, w, h, selectionOutlinePadding)
+  ctx.fillStyle = '#ddd4'
+  ctx.strokeStyle = '#ddd'
+  ctx.fill()
+  ctx.stroke()
+}
+
+const drawHoldLine = (n: Note) => {
+  if (ctx === null) return
+  const note = n as HoldStart | HoldTick
+  let nextNote = note.nextNode
+
+  if (note.type === 'HoldTick' && (note as HoldTick).tickType === TickType.Skip)
+    return
+
+  while ('nextNode' in nextNote && nextNote.tickType === TickType.Skip) {
+    nextNote = nextNote.nextNode
+  }
+
+  const startX = width / 2 + (note.lane - note.size / 2) * 2 * laneWidth
+  const startW = note.size * 2 * laneWidth
+  const startY = beatToY(note.beat)
+
+  const endX = width / 2 + (nextNote.lane - nextNote.size / 2) * 2 * laneWidth
+  const endW = nextNote.size * 2 * laneWidth
+  const endY = beatToY(nextNote.beat)
+
+  ctx.beginPath()
+  ctx.moveTo(startX, startY)
+  ctx.lineTo(startX + startW, startY)
+  if (note.easingType === EasingType.EaseIn)
+    ctx.quadraticCurveTo(
+      startX + startW,
+      (startY + endY) / 2,
+      endX + endW,
+      endY,
+    )
+  else if (note.easingType === EasingType.EaseOut)
+    ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
+  else if (note.easingType === EasingType.EaseInOut) {
+    ctx.quadraticCurveTo(
+      startX + startW,
+      (startY + (startY + endY) / 2) / 2,
+      (startX + endX) / 2 + (startW + endW) / 2,
+      (startY + endY) / 2,
+    )
+    ctx.quadraticCurveTo(
+      endX + endW,
+      ((startY + endY) / 2 + endY) / 2,
+      endX + endW,
+      endY,
+    )
+  } else if (note.easingType === EasingType.EaseOutIn) {
+    ctx.quadraticCurveTo(
+      (startX + endX) / 2 + (startW + endW) / 2,
+      (startY + (startY + endY) / 2) / 2,
+      (startX + endX) / 2 + (startW + endW) / 2,
+      (startY + endY) / 2,
+    )
+    ctx.quadraticCurveTo(
+      (startX + endX) / 2 + (startW + endW) / 2,
+      ((startY + endY) / 2 + endY) / 2,
+      endX + endW,
+      endY,
+    )
+  } else ctx.lineTo(endX + endW, endY)
+
+  ctx.lineTo(endX, endY)
+  if (note.easingType === EasingType.EaseIn)
+    ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
+  else if (note.easingType === EasingType.EaseOut)
+    ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
+  else if (note.easingType === EasingType.EaseInOut) {
+    ctx.quadraticCurveTo(
+      endX,
+      ((startY + endY) / 2 + endY) / 2,
+      (startX + endX) / 2,
+      (startY + endY) / 2,
+    )
+    ctx.quadraticCurveTo(
+      startX,
+      (startY + (endY + startY) / 2) / 2,
+      startX,
+      startY,
+    )
+  } else if (note.easingType === EasingType.EaseOutIn) {
+    ctx.quadraticCurveTo(
+      (startX + endX) / 2,
+      ((startY + endY) / 2 + endY) / 2,
+      (startX + endX) / 2,
+      (startY + endY) / 2,
+    )
+    ctx.quadraticCurveTo(
+      (endX + startX) / 2,
+      (startY + (endY + startY) / 2) / 2,
+      startX,
+      startY,
+    )
+  } else ctx.lineTo(startX, startY)
+
+  if (note.isGuide) {
+    let pN = note as HoldStart | HoldTick | HoldEnd
+    while (pN.type !== 'HoldStart') pN = pN.prevNode
+    let nN = note as HoldEnd | HoldTick | HoldEnd
+    while (nN.type !== 'HoldEnd') nN = nN.nextNode
+    const gY0 = beatToY(pN.beat)
+    const gY1 = beatToY(nN.beat)
+    const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
+    guideGradient.addColorStop(
+      0,
+      (note.isGold ? goldGuideColor : guideColor) + 'bb',
+    )
+    guideGradient.addColorStop(
+      1,
+      (note.isGold ? goldGuideColor : guideColor) + '33',
+    )
+    ctx.fillStyle = guideGradient
+  } else {
+    if (note.isGold) ctx.fillStyle = '#fbffdcaa'
+    else ctx.fillStyle = '#7fffd3aa'
+  }
+  ctx.fill()
+}
+
+const draw = (timeStamp: number) => {
+  if (ctx === null) return
+  if (lastTime == undefined) lastTime = timeStamp
+  const deltaTime = timeStamp - lastTime
+
+  // build tsig segments
+  const segments = buildSegments()
 
   if (
     dragMode !== DragMode.None &&
@@ -1307,7 +1996,8 @@ const draw = (
     if (dragMode === DragMode.Move) {
       const yOff = dragStartY - mouseY
 
-      const divisionHeight = (BEAT_HEIGHT * zoom) / (division / 4)
+      const divisionHeight =
+        (BEAT_HEIGHT * globalState.zoom) / (globalState.division / 4)
       const itter = Math.abs(Math.floor(yOff / divisionHeight))
 
       if (yOff > divisionHeight / 2) {
@@ -1315,18 +2005,20 @@ const draw = (
 
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
-          .forEach((n) => (n.beat += (4 / division) * itter))
+          .forEach((n) => (n.beat += (4 / globalState.division) * itter))
       } else if (yOff < -divisionHeight / 2) {
         if (
           chartNotes.filter(
-            (n, i) => selectedIndeces.has(i) && n.beat < (4 / division) * itter,
+            (n, i) =>
+              selectedIndeces.has(i) &&
+              n.beat < (4 / globalState.division) * itter,
           ).length === 0
         ) {
           dragStartY += divisionHeight * itter
 
           chartNotes
             .filter((_, i) => selectedIndeces.has(i))
-            .forEach((n) => (n.beat -= (4 / division) * itter))
+            .forEach((n) => (n.beat -= (4 / globalState.division) * itter))
         }
       }
     }
@@ -1347,10 +2039,10 @@ const draw = (
       const rawLaneOffset = getLaneFromMouse(mouseX!)
 
       const groupLeft = Math.min(
-        ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2),
+        ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2),
       )
       const groupRight = Math.max(
-        ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2),
+        ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
       )
       const groupCenter = (groupLeft + groupRight) / 2
       const desiredLaneOffset = rawLaneOffset - groupCenter
@@ -1358,7 +2050,7 @@ const draw = (
       const allowedLows: number[] = []
       const allowedHighs: number[] = []
       for (const n of clipboard) {
-        const size = (n as any).size ?? 1
+        const size = (n as Note).size ?? 1
         const minLane = -3 + size / 2
         const maxLane = 3 - size / 2
         allowedLows.push(minLane - (n.lane ?? 0))
@@ -1383,7 +2075,7 @@ const draw = (
 
       const adjustedMap = new Map<Note, Note>()
       const adjusted: Note[] = clipboard.map((n) => {
-        const copy: any = { ...(n as any) }
+        const copy: Note = { ...n }
         copy.beat = (n.beat ?? 0) + beatOffset
         copy.lane = (n.lane ?? 0) + laneOffset
         adjustedMap.set(n, copy)
@@ -1415,6 +2107,8 @@ const draw = (
         selectedIndeces.add(startIndex + i)
 
       isPasting = false
+
+      _eventOffsetCache = computeEventOffsets()
 
       break mouseDown
     }
@@ -1474,23 +2168,23 @@ const draw = (
     ) {
       selectedIndeces.clear()
       if (notesAtPos.length !== 0) {
-        let note = notesAtPos[0]
+        const note = notesAtPos[0]
         selectedIndeces.add(chartNotes.indexOf(note))
 
-        if (selectedTool === 0) {
+        if (globalState.selectedTool === 0) {
           dragStartX = mouseX
           dragStartY = mouseY
 
-          let dragScaleLeftEdge =
+          const dragScaleLeftEdge =
             width / 2 + laneWidth * (note.lane - note.size / 2 + 1 / 6) * 2
-          let dragScaleRightEdge =
+          const dragScaleRightEdge =
             width / 2 + laneWidth * (note.lane + note.size / 2 - 1 / 6) * 2
 
           if (mouseX <= dragScaleLeftEdge) dragMode = DragMode.ScaleLeft
           else if (mouseX >= dragScaleRightEdge) dragMode = DragMode.ScaleRight
           else dragMode = DragMode.Move
         }
-      } else if (selectedTool === 0) {
+      } else if (globalState.selectedTool === 0) {
         selectionStartX = mouseX
         selectionStartY = mouseY
       }
@@ -1510,18 +2204,21 @@ const draw = (
       }
     }
 
-    if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(selectedTool)) {
-      if (notesAtPos.length > 0 && ![8, 9, 10].includes(selectedTool)) {
-        if (selectedTool === 0) {
+    if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(globalState.selectedTool)) {
+      if (
+        notesAtPos.length > 0 &&
+        ![8, 9, 10].includes(globalState.selectedTool)
+      ) {
+        if (globalState.selectedTool === 0) {
           const noteToDrag = notesAtPos[0]
 
           dragStartX = mouseX
           dragStartY = mouseY
 
-          let dragScaleLeftEdge =
+          const dragScaleLeftEdge =
             width / 2 +
             laneWidth * (noteToDrag.lane - noteToDrag.size / 2 + 1 / 6) * 2
-          let dragScaleRightEdge =
+          const dragScaleRightEdge =
             width / 2 +
             laneWidth * (noteToDrag.lane + noteToDrag.size / 2 - 1 / 6) * 2
 
@@ -1531,8 +2228,8 @@ const draw = (
         }
 
         selectedIndeces.forEach((i) => {
-          if (selectedTool === 2) {
-            let note = chartNotes[i] as HoldStart | HoldTick
+          if (globalState.selectedTool === 2) {
+            const note = chartNotes[i] as HoldStart | HoldTick
             if (note.type !== 'HoldStart' && note.type !== 'HoldTick') return
 
             if (note.easingType === EasingType.Linear)
@@ -1544,8 +2241,8 @@ const draw = (
             else if (note.easingType === EasingType.EaseInOut)
               note.easingType = EasingType.EaseOutIn
             else note.easingType = EasingType.Linear
-          } else if (selectedTool === 3) {
-            let note = chartNotes[i] as HoldTick
+          } else if (globalState.selectedTool === 3) {
+            const note = chartNotes[i] as HoldTick
             if (note.type !== 'HoldTick') return
 
             if (note.isGuide) {
@@ -1561,19 +2258,19 @@ const draw = (
               note.tickType = TickType.Normal
           }
 
-          let note = chartNotes[i] as TapNote
+          const note = chartNotes[i] as TapNote
 
           saveHistory()
 
-          if (selectedTool === 5) {
-            if ((note as any).type !== 'HoldTick') {
+          if (globalState.selectedTool === 5) {
+            if ((note as Note).type !== 'HoldTick') {
               if (
-                (note as any).type !== 'HoldEnd' ||
-                (note as any as HoldEnd).flickDir !== FlickDirection.None
+                (note as Note).type !== 'HoldEnd' ||
+                (note as Note as HoldEnd).flickDir !== FlickDirection.None
               ) {
                 const newGoldStatus = !note.isGold
                 note.isGold = newGoldStatus
-                if ((note as any).type === 'HoldStart') {
+                if ((note as Note).type === 'HoldStart') {
                   let n = chartNotes[i] as HoldStart | HoldTick | HoldEnd
 
                   while ('nextNode' in n) {
@@ -1584,10 +2281,10 @@ const draw = (
               }
             }
           }
-          if (selectedTool === 6) note.isTrace = !note.isTrace
+          if (globalState.selectedTool === 6) note.isTrace = !note.isTrace
 
-          if (selectedTool === 4) {
-            if (!['HoldStart', 'HoldTick'].includes((note as any).type)) {
+          if (globalState.selectedTool === 4) {
+            if (!['HoldStart', 'HoldTick'].includes(note.type)) {
               const current = note.flickDir
 
               if (current === FlickDirection.None)
@@ -1599,15 +2296,15 @@ const draw = (
               else if (current === FlickDirection.Right) {
                 note.flickDir = FlickDirection.None
 
-                if ((note as any).type === 'HoldEnd') {
-                  let n = note as any as HoldEnd
+                if ((note as Note).type === 'HoldEnd') {
+                  const n = note as Note as HoldEnd
                   note.isGold = n.prevNode.isGold
                 }
               }
             }
           }
         })
-      } else if (selectedTool !== 0) {
+      } else if (globalState.selectedTool !== 0) {
         const newLane = Math.min(
           3 - nextNoteOptions.size / 2,
           Math.max(
@@ -1621,7 +2318,7 @@ const draw = (
           ),
         )
 
-        if (selectedTool === 8) {
+        if (globalState.selectedTool === 8) {
           if (
             chartNotes.filter(
               (n) => n.type === 'BPMChange' && n.beat === nearestBeat,
@@ -1637,8 +2334,9 @@ const draw = (
             } as BPMChange
 
             chartNotes.push(newNote)
+            _eventOffsetCache = computeEventOffsets()
           }
-        } else if (selectedTool === 9) {
+        } else if (globalState.selectedTool === 9) {
           if (
             chartNotes.filter(
               (n) => n.type === 'TimeSignature' && n.beat === nearestBeat,
@@ -1655,8 +2353,9 @@ const draw = (
             } as TimeSignature
 
             chartNotes.push(newNote)
+            _eventOffsetCache = computeEventOffsets()
           }
-        } else if (selectedTool === 10) {
+        } else if (globalState.selectedTool === 10) {
           if (
             chartNotes.filter(
               (n) => n.type === 'HiSpeed' && n.beat === nearestBeat,
@@ -1672,8 +2371,12 @@ const draw = (
             } as HiSpeed
 
             chartNotes.push(newNote)
+            _eventOffsetCache = computeEventOffsets()
           }
-        } else if (selectedTool === 2 || selectedTool === 7) {
+        } else if (
+          globalState.selectedTool === 2 ||
+          globalState.selectedTool === 7
+        ) {
           saveHistory()
           const newStartNote = {
             type: 'HoldStart',
@@ -1683,19 +2386,20 @@ const draw = (
             isGold: false,
             isTrace: false,
             easingType: EasingType.Linear,
-            isGuide: selectedTool === 7,
-            isHidden: selectedTool === 7,
+            isGuide: globalState.selectedTool === 7,
+            isHidden: globalState.selectedTool === 7,
           } as HoldStart
 
           const newEndNote = {
             type: 'HoldEnd',
-            beat: nearestBeat + getTsig(nearestBeat).bottom / division,
+            beat:
+              nearestBeat + getTsig(nearestBeat).bottom / globalState.division,
             lane: newLane,
             size: nextNoteOptions.size,
             isGold: false,
             isTrace: false,
             flickDir: FlickDirection.None,
-            isHidden: selectedTool === 7,
+            isHidden: globalState.selectedTool === 7,
             prevNode: newStartNote,
           } as HoldEnd
 
@@ -1703,7 +2407,7 @@ const draw = (
 
           chartNotes.push(newStartNote)
           chartNotes.push(newEndNote)
-        } else if (selectedTool === 3) {
+        } else if (globalState.selectedTool === 3) {
           saveHistory()
           const viableNotes = chartNotes
             .filter((n) => {
@@ -1777,10 +2481,10 @@ const draw = (
             beat: nearestBeat,
             lane: newLane,
             size: nextNoteOptions.size,
-            isGold: selectedTool === 5,
-            isTrace: selectedTool === 6,
+            isGold: globalState.selectedTool === 5,
+            isTrace: globalState.selectedTool === 6,
             flickDir:
-              selectedTool === 4
+              globalState.selectedTool === 4
                 ? nextNoteOptions.flickDir
                 : FlickDirection.None,
           } as TapNote
@@ -1918,210 +2622,18 @@ const draw = (
       })
   }
 
-  if (yOffset < -150) {
-    yOffset = -150
-  }
+  if (yOffset < -150) yOffset = -150
 
-  if (pZoom !== zoom && pZoom !== 0) {
-    yOffset *= zoom / pZoom
-  }
+  if (pZoom !== globalState.zoom && pZoom !== 0)
+    yOffset *= globalState.zoom / pZoom
 
   ctx.clearRect(0, 0, width, height)
 
   ctx.fillStyle = '#0007'
   ctx.fillRect(0, 0, width, height)
 
-  const drawLanes = () => {
-    ctx.fillStyle = '#2229'
-    ctx.fillRect(width / 2 - 6 * laneWidth, 0, 12 * laneWidth, height)
-
-    ctx.beginPath()
-    for (let i = 0; i < 13; i += 2) {
-      let xOff = width / 2 + laneWidth * (i - 6)
-      ctx.moveTo(xOff, 0)
-      ctx.lineTo(xOff, height)
-    }
-    ctx.strokeStyle = '#bbbb'
-    ctx.lineWidth = 3
-    ctx.stroke()
-
-    ctx.beginPath()
-    for (let i = 1; i < 13; i += 2) {
-      let xOff = width / 2 + laneWidth * (i - 6)
-      ctx.moveTo(xOff, 0)
-      ctx.lineTo(xOff, height)
-    }
-    ctx.strokeStyle = '#888b'
-    ctx.lineWidth = 2
-    ctx.stroke()
-  }
-
   drawLanes()
-
-  const drawDivisions = () => {
-    // Draw division lines by iterating subdivision indices per time-signature segment.
-    // This avoids floating-point accumulation by using integer subdivision indices (k).
-
-    // visible beat range (bottom -> top)
-    const visibleMinBeat = getBeatFromMouse(height)
-    const visibleMaxBeat = getBeatFromMouse(0)
-
-    // use prebuilt `segments` (constructed above) which already contains
-    // contiguous time-signature segments starting at beat 0
-
-    // iterate segments that overlap visible range
-    for (const seg of segments) {
-      const segStart = Math.max(seg.start, visibleMinBeat)
-      const segEnd = Math.min(seg.end, visibleMaxBeat)
-      if (!(segStart <= segEnd)) continue
-
-      // subdivisions per quarter-beat (keep beat unit as quarter notes)
-      const subsPerBeat = division / 4
-
-      // integer subdivision indices that lie in this segment
-      const kStart = Math.ceil(segStart * subsPerBeat - 1e-9)
-      const kEnd = Math.floor(segEnd * subsPerBeat + 1e-9)
-
-      // measure width in subdivisions: division * top / bottom
-      const measureSubCount = Math.round((division * seg.top) / seg.bottom)
-
-      // offset in subdivision units where this segment starts (so kRelative resets to 0 at segment start)
-      const segOffsetK = Math.round(seg.start * subsPerBeat)
-
-      for (let k = kStart; k <= kEnd; k++) {
-        const beat = k / subsPerBeat
-        // round beat to avoid tiny FP noise when rendering/labeling
-        const beatRounded = Math.round((beat + Number.EPSILON) * 1e9) / 1e9
-        const y = beatToY(beatRounded)
-        if (y < -10 || y > height + 10) continue
-
-        ctx.beginPath()
-
-        const kRelative = k - segOffsetK
-        const isMeasureLine =
-          measureSubCount > 0 &&
-          kRelative >= 0 &&
-          kRelative % measureSubCount === 0
-
-        // determine whether this line falls exactly on a beat according to the time-signature bottom
-        // use kRelative (subdivision index relative to segment start) so beat lines reset per segment
-        // beatTimesFactor = kRelative * seg.bottom / division -> integer when on a beat
-        const beatTimesFactor = (kRelative * seg.bottom) / division
-        const isBeatLine =
-          kRelative >= 0 &&
-          Math.abs(Math.round(beatTimesFactor) - beatTimesFactor) < 1e-9
-
-        if (isMeasureLine) {
-          ctx.moveTo(width / 2 - 7 * laneWidth, y)
-          ctx.lineTo(width / 2 + 7 * laneWidth, y)
-          ctx.strokeStyle = 'rgba(220,220,220,0.95)'
-          ctx.lineWidth = 3
-          ctx.stroke()
-
-          ctx.fillStyle = ctx.strokeStyle
-          ctx.textBaseline = 'middle'
-          // measure number relative to segment start (1-based)
-          const measureIndex = Math.floor(kRelative / measureSubCount)
-          // annotate first measure of a new time signature with the signature text
-
-          ctx.font = '24px Arial'
-          ctx.textAlign = 'right'
-          ctx.fillText(
-            measureIndex.toString(),
-            width / 2 - 6 * laneWidth - 20,
-            y + 30,
-          )
-        } else if (isBeatLine) {
-          // full beat lines are more visible than subdivisions
-          ctx.moveTo(width / 2 - 6 * laneWidth, y)
-          ctx.lineTo(width / 2 + 6 * laneWidth, y)
-          ctx.strokeStyle = 'rgba(221,221,221,0.75)'
-          ctx.lineWidth = 2
-          ctx.stroke()
-        } else {
-          // subdivisions should be faint
-          ctx.moveTo(width / 2 - 6 * laneWidth, y)
-          ctx.lineTo(width / 2 + 6 * laneWidth, y)
-          ctx.strokeStyle = 'rgba(119,119,119,0.67)'
-          ctx.lineWidth = 1
-          ctx.stroke()
-        }
-      }
-    }
-  }
-
-  drawDivisions()
-
-  const drawWaveform = () => {
-    if (!waveformReady || !waveform || waveform.length === 0) return
-
-    // visible beat range (bottom -> top)
-    const visibleMinBeat = getBeatFromMouse(height)
-    const visibleMaxBeat = getBeatFromMouse(0)
-
-    if (visibleMaxBeat <= visibleMinBeat) return
-
-    const leftEdge = width / 2 - 6 * laneWidth
-    const rightEdge = width / 2 + 6 * laneWidth
-    const centerX = (leftEdge + rightEdge) / 2
-    const maxHalfWidth = (rightEdge - leftEdge) / 2 - 6 // small padding
-
-    const leftPoints: { x: number; y: number }[] = []
-    const rightPoints: { x: number; y: number }[] = []
-
-    // sample every N pixels vertically to keep it fast
-    const step = Math.max(1, Math.floor(window.devicePixelRatio)) * 2
-
-    for (let y = 0; y <= height; y += step) {
-      const beat = getBeatFromMouse(y)
-
-      // map beat -> time in seconds using chart BPM map
-      const timeSec = getTime(beat)
-
-      // apply music offset (ms -> seconds)
-      const offsetSec = (musicOffsetMs ?? 0) / 1000
-      const adjustedTime = timeSec - offsetSec
-
-      const t = waveformDuration > 0 ? adjustedTime / waveformDuration : 0
-
-      let amp = 0
-      if (t >= 0 && t <= 1) {
-        const idx = Math.floor(t * (waveform.length - 1))
-        amp = waveform[idx] ?? 0
-      }
-
-      const halfW = amp * maxHalfWidth
-
-      leftPoints.push({ x: centerX - halfW, y })
-      rightPoints.push({ x: centerX + halfW, y })
-    }
-
-    // draw filled waveform (left side top->bottom, right side bottom->top)
-    ctx.beginPath()
-    // left side
-    for (let i = 0; i < leftPoints.length; i++) {
-      const p = leftPoints[i]
-      if (i === 0) ctx.moveTo(p.x, p.y)
-      else ctx.lineTo(p.x, p.y)
-    }
-
-    // right side (reverse)
-    for (let i = rightPoints.length - 1; i >= 0; i--) {
-      const p = rightPoints[i]
-      ctx.lineTo(p.x, p.y)
-    }
-
-    ctx.closePath()
-
-    // gradient fill to match guide style
-    // const grad = ctx.createLinearGradient(0, 0, 0, height)
-    // grad.addColorStop(0, guideColor + '66')
-    // grad.addColorStop(1, guideColor + '11')
-    // ctx.fillStyle = grad
-    ctx.fillStyle = '#bbb3'
-    ctx.fill()
-  }
-
+  drawDivisions(segments)
   drawWaveform()
 
   const cursorY = beatToY(cursorPos)
@@ -2149,507 +2661,6 @@ const draw = (
     (n) => n.beat >= minBeat && n.beat <= maxBeat,
   )
 
-  const getNoteImageName = (n: Note): string => {
-    let noteImageName = 'notes_2'
-    if (n.type === 'HoldTick') return 'tick'
-    else if (n.type === 'Tap') {
-      const note = n as TapNote
-
-      if (note.isTrace) {
-        if (note.isGold) noteImageName = 'notes_5'
-        else if (note.flickDir !== FlickDirection.None)
-          noteImageName = 'notes_6'
-        else noteImageName = 'notes_4'
-      } else if (note.isGold) noteImageName = 'notes_0'
-      else if (note.flickDir !== FlickDirection.None) noteImageName = 'notes_3'
-    } else if (n.type === 'HoldStart' || n.type === 'HoldEnd') {
-      const note = n as HoldStart | HoldEnd
-      if (note.isHidden) return 'hidden'
-      if (note.isTrace) {
-        if (note.isGold) noteImageName = 'notes_5'
-        else if (
-          note.type === 'HoldEnd' &&
-          note.flickDir !== FlickDirection.None
-        )
-          noteImageName = 'notes_6'
-        else noteImageName = 'notes_4'
-      } else if (note.isGold) noteImageName = 'notes_0'
-      else if (note.type === 'HoldEnd' && note.flickDir !== FlickDirection.None)
-        noteImageName = 'notes_3'
-      else noteImageName = 'notes_1'
-    } else {
-      return 'none'
-    }
-
-    return noteImageName
-  }
-
-  const drawNote = (n: Note) => {
-    const { lane, beat, size } = n
-
-    if (n.type === 'HiSpeed') {
-      const note = n as HiSpeed
-      const y = beatToY(beat)
-      const lanesEdge = width / 2 + 6 * laneWidth
-
-      const startX = getEventOffset(note)
-
-      ctx.beginPath()
-      ctx.moveTo(lanesEdge, y)
-      ctx.lineTo(lanesEdge + startX + 4, y)
-      ctx.strokeStyle = 'red'
-      ctx.lineWidth = 4
-      if (selectedIndeces.has(chartNotes.indexOf(note)))
-        ctx.strokeStyle = '#ff4444'
-      ctx.stroke()
-
-      const fontSize = '24px'
-      const fontFamily = 'arial'
-
-      const { width: eventWidth, height: eventHeight } = getEventSize(note)
-
-      ctx.beginPath()
-      // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
-      ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
-      ctx.fillStyle = 'red'
-      if (selectedIndeces.has(chartNotes.indexOf(note)))
-        ctx.fillStyle = '#ff4444'
-      ctx.fill()
-
-      ctx.fillStyle = 'black'
-      ctx.font = `${fontSize} ${fontFamily}`
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'bottom'
-      ctx.fillText(`${note.speed}x`, lanesEdge + startX + 8, y - 8)
-
-      return
-    } else if (n.type === 'TimeSignature') {
-      const note = n as TimeSignature
-      const y = beatToY(beat)
-      const lanesEdge = width / 2 + 6 * laneWidth
-
-      const startX = getEventOffset(note)
-
-      ctx.beginPath()
-      ctx.moveTo(lanesEdge, y)
-      ctx.lineTo(lanesEdge + startX + 4, y)
-      ctx.strokeStyle = 'yellow'
-      ctx.lineWidth = 4
-      if (selectedIndeces.has(chartNotes.indexOf(note)))
-        ctx.strokeStyle = '#ffff99'
-      ctx.stroke()
-
-      const fontSize = '24px'
-      const fontFamily = 'arial'
-
-      const { width: eventWidth, height: eventHeight } = getEventSize(note)
-
-      ctx.beginPath()
-      // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
-      ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
-      ctx.fillStyle = 'yellow'
-      if (selectedIndeces.has(chartNotes.indexOf(note)))
-        ctx.fillStyle = '#ffff99'
-      ctx.fill()
-
-      ctx.fillStyle = 'black'
-      ctx.font = `${fontSize} ${fontFamily}`
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'bottom'
-      ctx.fillText(`${note.top}/${note.bottom}`, lanesEdge + startX + 8, y - 8)
-
-      return
-    } else if (n.type === 'BPMChange') {
-      const note = n as BPMChange
-      const y = beatToY(beat)
-      const lanesEdge = width / 2 + 6 * laneWidth
-
-      const startX = getEventOffset(note)
-
-      ctx.beginPath()
-      ctx.moveTo(lanesEdge, y)
-      ctx.lineTo(lanesEdge + startX + 4, y)
-      ctx.strokeStyle = 'lime'
-      ctx.lineWidth = 4
-      if (selectedIndeces.has(chartNotes.indexOf(note)))
-        ctx.strokeStyle = '#99ff99'
-      ctx.stroke()
-
-      const fontSize = '24px'
-      const fontFamily = 'arial'
-
-      const { width: eventWidth, height: eventHeight } = getEventSize(note)
-
-      ctx.beginPath()
-      // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
-      ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
-      ctx.fillStyle = 'lime'
-      if (selectedIndeces.has(chartNotes.indexOf(note)))
-        ctx.fillStyle = '#99ff99'
-      ctx.fill()
-
-      ctx.fillStyle = 'black'
-      ctx.font = `${fontSize} ${fontFamily}`
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'bottom'
-      ctx.fillText(note.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
-
-      return
-    }
-
-    let aspectRatio = 4
-
-    const x = width / 2 + (lane * 2 - size) * laneWidth
-    const w = size * 2 * laneWidth
-    const y = beatToY(beat) - NOTE_HEIGHT / 2
-    const h = NOTE_HEIGHT
-
-    if (n.type === 'HoldTick') {
-      if (!hideTickOutlines && !(hideTickOutlinesOnPlay && isPlaying)) {
-        ctx.beginPath()
-        ctx.roundRect(x, y + 16, w, h - 32, 4)
-
-        ctx.lineWidth = 3
-        ctx.strokeStyle = '#7fffd3'
-        if ((n as HoldTick).tickType === TickType.Skip) ctx.strokeStyle = 'cyan'
-        ctx.stroke()
-      }
-    } else {
-      const noteImageName = getNoteImageName(n)
-      if (noteImageName === 'none') return
-      else if (noteImageName === 'hidden') {
-        ctx.beginPath()
-        ctx.roundRect(x, y + 16, w, h - 32, 4)
-
-        ctx.fillStyle = guideColor
-        if ((n as HoldStart).isGold) ctx.fillStyle = goldGuideColor
-        ctx.strokeStyle = 'white'
-        ctx.lineWidth = 3
-        ctx.fill()
-        ctx.stroke()
-        return
-      }
-
-      const rect = getRect(noteImageName)!
-
-      const edgeSize = NOTE_HEIGHT
-      aspectRatio = rect.h / NOTE_HEIGHT
-
-      const x1 = x - 15
-      const w1 = edgeSize
-
-      const x3 = x + w - NOTE_HEIGHT + 15
-      const w3 = w1
-
-      const x2 = x1 + w1 //- 1
-      const w2 = Math.abs(x1 - x3) - w1 //+ 2
-
-      // first part
-      ctx.drawImage(
-        imageSource,
-        rect.x,
-        rect.y,
-        w1 * aspectRatio,
-        rect.h,
-        x1,
-        y,
-        w1,
-        h,
-      )
-
-      // last part
-      ctx.drawImage(
-        imageSource,
-        rect.x + rect.w - w1 * aspectRatio,
-        rect.y,
-        w1 * aspectRatio,
-        rect.h,
-        x3,
-        y,
-        w3,
-        h,
-      )
-
-      // middle part
-      ctx.drawImage(
-        imageSource,
-        rect.x + edgeSize * aspectRatio,
-        rect.y,
-        rect.w - w1 * aspectRatio * 2,
-        rect.h,
-        x2,
-        y,
-        w2,
-        h,
-      )
-    }
-
-    if (
-      n.type === 'Tap' ||
-      n.type === 'HoldStart' ||
-      n.type === 'HoldEnd' ||
-      n.type === 'HoldTick'
-    ) {
-      let note: TapNote | HoldEnd
-      if (n.type === 'Tap') note = n as TapNote
-      else note = n as HoldEnd
-
-      if (
-        note.isTrace ||
-        ((note as any).type === 'HoldTick' &&
-          (note as any).tickType !== TickType.Hidden)
-      ) {
-        let traceSpriteName = 'notes_friction_among_'
-        if (note.isGold) traceSpriteName += 'crtcl'
-        else if (
-          !['HoldStart', 'HoldTick'].includes((note as any).type) &&
-          note.flickDir !== FlickDirection.None
-        )
-          traceSpriteName += 'flick'
-        else traceSpriteName += 'long'
-
-        const traceRect = getRect(traceSpriteName)!
-
-        const tw = (1.75 * traceRect.w) / aspectRatio
-        const th = (1.75 * traceRect.h) / aspectRatio
-        let tx = (width - tw) / 2 + lane * 2 * laneWidth
-
-        if (
-          (note as any).type === 'HoldTick' &&
-          (note as any).tickType === TickType.Skip
-        ) {
-          const n = note as any as HoldTick
-          let pN = n.prevNode
-          let nN = n.nextNode
-
-          while ('prevNode' in pN && pN.tickType === TickType.Skip)
-            pN = pN.prevNode
-
-          while ('nextNode' in nN && nN.tickType === TickType.Skip)
-            nN = nN.nextNode
-
-          const percentY = (n.beat - pN.beat) / (nN.beat - pN.beat)
-          const easedY =
-            pN.easingType === EasingType.EaseIn
-              ? Math.pow(percentY, 2)
-              : pN.easingType === EasingType.EaseOut
-                ? 1 - Math.pow(1 - percentY, 2)
-                : percentY
-          tx =
-            (width - tw) / 2 +
-            ((1 - easedY) * pN.lane + easedY * nN.lane) * 2 * laneWidth
-        }
-
-        const ty = y - NOTE_HEIGHT / 20
-
-        ctx.drawImage(
-          imageSource,
-          traceRect.x,
-          traceRect.y,
-          traceRect.w,
-          traceRect.h,
-          tx,
-          ty,
-          tw,
-          th,
-        )
-      }
-    }
-  }
-
-  const drawFlickArrow = (n: Note) => {
-    const { lane, beat } = n
-
-    const noteImageName = getNoteImageName(n)
-
-    const rect = getRect(noteImageName)!
-    if (['none', 'tick', 'hidden'].includes(noteImageName)) return
-
-    const aspectRatio = rect.h / NOTE_HEIGHT
-
-    const y = beatToY(beat) - NOTE_HEIGHT / 2
-
-    if (n.type === 'Tap' || n.type === 'HoldEnd') {
-      let note: TapNote | HoldEnd
-      if (n.type === 'Tap') note = n as TapNote
-      else note = n as HoldEnd
-      if (note.flickDir !== FlickDirection.None) {
-        let flickSpriteName = 'notes_flick_arrow_'
-        if (note.isGold) flickSpriteName += 'crtcl_'
-        flickSpriteName += '0' + Math.min(6, n.size * 2)
-        if (note.flickDir !== FlickDirection.Default)
-          flickSpriteName += '_diagonal'
-
-        const flickRect = getRect(flickSpriteName)!
-
-        let fw = (1.25 * flickRect.w) / aspectRatio
-        const fh = (1.25 * flickRect.h) / aspectRatio
-        let fx = (width - fw) / 2 + lane * 2 * laneWidth
-        const fy = y - fh
-
-        if (note.flickDir === FlickDirection.Right) {
-          ctx.scale(-1, 1)
-          fw *= -1
-          fx *= -1
-        }
-
-        ctx.drawImage(
-          imageSource,
-          flickRect.x,
-          flickRect.y,
-          flickRect.w,
-          flickRect.h,
-          fx,
-          fy,
-          fw,
-          fh,
-        )
-
-        if (note.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
-      }
-    }
-  }
-
-  const drawSelectionOutline = (n: Note) => {
-    if (['HiSpeed', 'TimeSignature', 'BPMChange'].includes(n.type)) return
-
-    const selectionOutlinePadding = 8
-
-    const { lane, beat, size } = n
-
-    const x =
-      width / 2 + (lane * 2 - size) * laneWidth - selectionOutlinePadding
-    const w = size * 2 * laneWidth + 2 * selectionOutlinePadding
-    const y = beatToY(beat) - NOTE_HEIGHT / 2 + selectionOutlinePadding / 2
-    const h = NOTE_HEIGHT - selectionOutlinePadding
-
-    ctx.beginPath()
-    ctx.roundRect(x, y, w, h, selectionOutlinePadding)
-    ctx.fillStyle = '#ddd4'
-    ctx.strokeStyle = '#ddd'
-    ctx.fill()
-    ctx.stroke()
-  }
-
-  const drawHoldLine = (n: Note) => {
-    const note = n as HoldStart | HoldTick
-    let nextNote = note.nextNode
-
-    if (
-      note.type === 'HoldTick' &&
-      (note as HoldTick).tickType === TickType.Skip
-    )
-      return
-
-    while ('nextNode' in nextNote && nextNote.tickType === TickType.Skip) {
-      nextNote = nextNote.nextNode
-    }
-
-    const startX = width / 2 + (note.lane - note.size / 2) * 2 * laneWidth
-    const startW = note.size * 2 * laneWidth
-    const startY = beatToY(note.beat)
-
-    const endX = width / 2 + (nextNote.lane - nextNote.size / 2) * 2 * laneWidth
-    const endW = nextNote.size * 2 * laneWidth
-    const endY = beatToY(nextNote.beat)
-
-    ctx.beginPath()
-    ctx.moveTo(startX, startY)
-    ctx.lineTo(startX + startW, startY)
-    if (note.easingType === EasingType.EaseIn)
-      ctx.quadraticCurveTo(
-        startX + startW,
-        (startY + endY) / 2,
-        endX + endW,
-        endY,
-      )
-    else if (note.easingType === EasingType.EaseOut)
-      ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
-    else if (note.easingType === EasingType.EaseInOut) {
-      ctx.quadraticCurveTo(
-        startX + startW,
-        (startY + (startY + endY) / 2) / 2,
-        (startX + endX) / 2 + (startW + endW) / 2,
-        (startY + endY) / 2,
-      )
-      ctx.quadraticCurveTo(
-        endX + endW,
-        ((startY + endY) / 2 + endY) / 2,
-        endX + endW,
-        endY,
-      )
-    } else if (note.easingType === EasingType.EaseOutIn) {
-      ctx.quadraticCurveTo(
-        (startX + endX) / 2 + (startW + endW) / 2,
-        (startY + (startY + endY) / 2) / 2,
-        (startX + endX) / 2 + (startW + endW) / 2,
-        (startY + endY) / 2,
-      )
-      ctx.quadraticCurveTo(
-        (startX + endX) / 2 + (startW + endW) / 2,
-        ((startY + endY) / 2 + endY) / 2,
-        endX + endW,
-        endY,
-      )
-    } else ctx.lineTo(endX + endW, endY)
-
-    ctx.lineTo(endX, endY)
-    if (note.easingType === EasingType.EaseIn)
-      ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
-    else if (note.easingType === EasingType.EaseOut)
-      ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
-    else if (note.easingType === EasingType.EaseInOut) {
-      ctx.quadraticCurveTo(
-        endX,
-        ((startY + endY) / 2 + endY) / 2,
-        (startX + endX) / 2,
-        (startY + endY) / 2,
-      )
-      ctx.quadraticCurveTo(
-        startX,
-        (startY + (endY + startY) / 2) / 2,
-        startX,
-        startY,
-      )
-    } else if (note.easingType === EasingType.EaseOutIn) {
-      ctx.quadraticCurveTo(
-        (startX + endX) / 2,
-        ((startY + endY) / 2 + endY) / 2,
-        (startX + endX) / 2,
-        (startY + endY) / 2,
-      )
-      ctx.quadraticCurveTo(
-        (endX + startX) / 2,
-        (startY + (endY + startY) / 2) / 2,
-        startX,
-        startY,
-      )
-    } else ctx.lineTo(startX, startY)
-
-    if (note.isGuide) {
-      let pN = note as HoldStart | HoldTick | HoldEnd
-      while (pN.type !== 'HoldStart') pN = pN.prevNode
-      let nN = note as HoldEnd | HoldTick | HoldEnd
-      while (nN.type !== 'HoldEnd') nN = nN.nextNode
-      const gY0 = beatToY(pN.beat)
-      const gY1 = beatToY(nN.beat)
-      const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
-      guideGradient.addColorStop(
-        0,
-        (note.isGold ? goldGuideColor : guideColor) + 'bb',
-      )
-      guideGradient.addColorStop(
-        1,
-        (note.isGold ? goldGuideColor : guideColor) + '33',
-      )
-      ctx.fillStyle = guideGradient
-    } else {
-      if (note.isGold) ctx.fillStyle = '#fbffdcaa'
-      else ctx.fillStyle = '#7fffd3aa'
-    }
-    ctx.fill()
-  }
-
   notesToRender
     .filter((n) => selectedIndeces.has(chartNotes.indexOf(n)))
     .forEach((n) => drawSelectionOutline(n))
@@ -2664,7 +2675,7 @@ const draw = (
         nextN = nextN.nextNode
 
       return (
-        (n as any).beat < getBeatFromMouse(height) &&
+        (n as Note).beat < getBeatFromMouse(height) &&
         nextN.beat > getBeatFromMouse(0) &&
         !notesToRender.includes(n) &&
         !notesToRender.includes(nextN)
@@ -2711,7 +2722,7 @@ const draw = (
   }
 
   if (mouseX !== null && mouseY !== null) {
-    if ([1, 2, 3, 4, 5, 6, 7].includes(selectedTool) || isPasting) {
+    if ([1, 2, 3, 4, 5, 6, 7].includes(globalState.selectedTool) || isPasting) {
       const nearestBeat = getNearestDivision(getBeatFromMouse(mouseY))
       const newLane = Math.min(
         3 - nextNoteOptions.size / 2,
@@ -2735,10 +2746,10 @@ const draw = (
         // compute group's current horizontal center (in lane units) so we can
         // position the group such that the mouse sits at the group's center
         const groupLeft = Math.min(
-          ...clipboard.map((n) => (n.lane ?? 0) - ((n as any).size ?? 1) / 2),
+          ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2),
         )
         const groupRight = Math.max(
-          ...clipboard.map((n) => (n.lane ?? 0) + ((n as any).size ?? 1) / 2),
+          ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
         )
         const groupCenter = (groupLeft + groupRight) / 2
         const desiredLaneOffset = rawLaneOffset - groupCenter
@@ -2747,7 +2758,7 @@ const draw = (
         const allowedLows: number[] = []
         const allowedHighs: number[] = []
         for (const n of clipboard) {
-          const size = (n as any).size ?? 1
+          const size = (n as Note).size ?? 1
           const minLane = -3 + size / 2
           const maxLane = 3 - size / 2
           allowedLows.push(minLane - (n.lane ?? 0))
@@ -2777,7 +2788,7 @@ const draw = (
         // Build adjusted clones and map originals -> adjusted clones for pointer rewiring
         const adjustedMap = new Map<Note, Note>()
         const adjusted: Note[] = clipboard.map((n) => {
-          const copy: any = { ...(n as any) }
+          const copy: Note = { ...n }
           copy.beat = (n.beat ?? 0) + beatOffset
           copy.lane = (n.lane ?? 0) + laneOffset
           adjustedMap.set(n, copy)
@@ -2812,7 +2823,7 @@ const draw = (
       } else {
         let newNote: Note
 
-        if (selectedTool === 2 || selectedTool === 7)
+        if (globalState.selectedTool === 2 || globalState.selectedTool === 7)
           newNote = {
             type: 'HoldStart',
             beat: nearestBeat,
@@ -2821,11 +2832,11 @@ const draw = (
             isGold: false,
             isTrace: false,
             easingType: EasingType.Linear,
-            isHidden: selectedTool === 7,
-            isGuide: selectedTool === 7,
+            isHidden: globalState.selectedTool === 7,
+            isGuide: globalState.selectedTool === 7,
             nextNode: {} as HoldEnd,
           } as HoldStart
-        else if (selectedTool === 3)
+        else if (globalState.selectedTool === 3)
           newNote = {
             type: 'HoldTick',
             beat: nearestBeat,
@@ -2843,24 +2854,24 @@ const draw = (
             beat: nearestBeat,
             lane: newLane,
             size: nextNoteOptions.size,
-            isGold: selectedTool === 5,
-            isTrace: selectedTool === 6,
+            isGold: globalState.selectedTool === 5,
+            isTrace: globalState.selectedTool === 6,
             flickDir:
-              selectedTool === 4
+              globalState.selectedTool === 4
                 ? nextNoteOptions.flickDir
                 : FlickDirection.None,
           } as TapNote
 
         ctx.globalAlpha = 0.5
         drawNote(newNote)
-        if (selectedTool === 4) drawFlickArrow(newNote)
+        if (globalState.selectedTool === 4) drawFlickArrow(newNote)
         ctx.globalAlpha = 1
       }
     }
   }
 
   pMouseIsPressed = mouseIsPressed
-  pZoom = zoom
+  pZoom = globalState.zoom
   lastTime = timeStamp
 
   // ctx.fillStyle = 'white'
