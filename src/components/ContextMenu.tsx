@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { copy, cut, deleteSelected, flipSelection, paste } from '../editor/draw'
+import {
+  copy,
+  cut,
+  deleteSelected,
+  flipSelection,
+  paste,
+  shrinkSelectedDown,
+  shrinkSelectedUp,
+} from '../editor/draw'
 
 const ContextMenu = () => {
   const [isHidden, setIsHidden] = useState(true)
@@ -20,7 +28,7 @@ const ContextMenu = () => {
   const items = [
     {
       label: 'Delete',
-      action: deleteSelected,
+      action: () => deleteSelected(),
     },
     {
       type: 'separator',
@@ -69,11 +77,11 @@ const ContextMenu = () => {
     },
     {
       label: 'Shrink Up',
-      action: () => {},
+      action: () => shrinkSelectedUp(),
     },
     {
       label: 'Shrink Down',
-      action: () => {},
+      action: () => shrinkSelectedDown(),
     },
     {
       type: 'separator',
@@ -88,6 +96,11 @@ const ContextMenu = () => {
     },
   ]
 
+  const height = items.reduce(
+    (s, x) => (x?.type === 'separator' ? s + 9 : s + 21),
+    0,
+  )
+
   return (
     <>
       <div
@@ -96,8 +109,12 @@ const ContextMenu = () => {
           isHidden && 'hidden',
         )}
         style={{
-          top: pos.y,
-          left: pos.x,
+          top:
+            Math.max(
+              30,
+              Math.min(pos.y, document.body.clientHeight - height - 30),
+            ) + 'px',
+          left: pos.x + 'px',
         }}
       >
         {items.map((i, idx) =>

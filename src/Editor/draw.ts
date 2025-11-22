@@ -379,8 +379,8 @@ export const undo = () => {
   if (previousState) {
     setChartNotes(previousState)
     selectedIndeces.clear()
-    console.log('Undo successful:', historyManager.getHistorySummary())
   }
+  _eventOffsetCache = computeEventOffsets()
 }
 
 /**
@@ -391,8 +391,8 @@ export const redo = () => {
   if (nextState) {
     setChartNotes(nextState)
     selectedIndeces.clear()
-    console.log('Redo successful:', historyManager.getHistorySummary())
   }
+  _eventOffsetCache = computeEventOffsets()
 }
 
 /**
@@ -410,7 +410,6 @@ export const canRedo = () => historyManager.canRedo()
  */
 export const clearHistory = () => {
   historyManager.clear()
-  console.log('History cleared')
 }
 
 export const exportUSC = async () => {
@@ -1895,6 +1894,33 @@ const drawHoldLine = (n: Note) => {
     else ctx.fillStyle = '#7fffd3aa'
   }
   ctx.fill()
+}
+
+const TICKS_PER_BEAT = 480
+const TICK_SIZE = 1 / TICKS_PER_BEAT
+
+export const shrinkSelectedUp = () => {
+  saveHistory()
+  if (selectedIndeces.size <= 0) return
+
+  const notes = chartNotes.filter((_, i) => selectedIndeces.has(i))
+  notes.sort((a, b) => b.beat - a.beat)
+
+  const maxBeat = Math.max(...notes.map((x) => x.beat))
+
+  notes.forEach((n, i) => (n.beat = maxBeat - i * TICK_SIZE))
+}
+
+export const shrinkSelectedDown = () => {
+  saveHistory()
+  if (selectedIndeces.size <= 0) return
+
+  const notes = chartNotes.filter((_, i) => selectedIndeces.has(i))
+  notes.sort((a, b) => a.beat - b.beat)
+
+  const minBeat = Math.min(...notes.map((x) => x.beat))
+
+  notes.forEach((n, i) => (n.beat = minBeat + i * TICK_SIZE))
 }
 
 const draw = (timeStamp: number) => {
