@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
 import {
+  connectHolds,
   copy,
   cut,
   deleteSelected,
@@ -8,6 +9,7 @@ import {
   paste,
   shrinkSelectedDown,
   shrinkSelectedUp,
+  splitHold,
 } from '../editor/draw'
 
 const ContextMenu = () => {
@@ -88,11 +90,11 @@ const ContextMenu = () => {
     },
     {
       label: 'Connect Holds',
-      action: () => {},
+      action: () => connectHolds(),
     },
     {
       label: 'Split Hold',
-      action: () => {},
+      action: () => splitHold(),
     },
   ]
 
