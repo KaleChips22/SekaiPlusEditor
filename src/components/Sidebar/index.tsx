@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { twMerge } from 'tailwind-merge'
 import ChartProperties from './ChartProperties'
+import NoteOptions from './NoteOptions'
 
 const Sidebar = () => {
   const [tabSelection1, setTabSelection1] = useState<
@@ -11,48 +12,48 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className='bg-neutral-800 flex flex-col flex-1'>
-        <div className='flex-1 text-xs bg-neutral-800 border-b border-accent flex'>
+      <div className="bg-neutral-800 flex flex-col flex-1">
+        <div className="flex-1 text-xs bg-neutral-800 border-b border-accent flex">
           <div
             className={twMerge(
               'px-1 py-0.5 text-white rounded-t-xs ml-1 line-clamp-1',
               tabSelection1 === 'chartProperties'
                 ? 'bg-accent'
-                : 'bg-neutral-700'
+                : 'bg-neutral-700',
             )}
             onClick={() => setTabSelection1('chartProperties')}
           >
             Chart Properties
           </div>
-          <div
+          {/*<div
             className={twMerge(
               'px-1 py-0.5 text-white rounded-t-xs ml-0.5 line-clamp-1',
               tabSelection1 === 'noteProperties'
                 ? 'bg-accent'
-                : 'bg-neutral-700'
+                : 'bg-neutral-700',
             )}
             onClick={() => setTabSelection1('noteProperties')}
           >
             Note Properties
-          </div>
+          </div>*/}
         </div>
-        <div className='w-full h-full bg-neutral-700 p-2 text-sm text-white'>
+        <div className="w-full h-full bg-neutral-700 p-2 text-sm text-white">
           {tabSelection1 === 'chartProperties' && <ChartProperties />}
-          {tabSelection1 === 'noteProperties' && <div>TODO</div>}
+          {/*{tabSelection1 === 'noteProperties' && <div>TODO</div>}*/}
         </div>
-        <div className='pt-1 flex-1 text-xs bg-neutral-800 border-b border-accent flex'>
+        <div className="pt-1 flex-1 text-xs bg-neutral-800 border-b border-accent flex">
           <div
             className={twMerge(
               'px-1 py-0.5 text-white rounded-t-xs ml-1 line-clamp-1',
-              tabSelection2 === 'options' ? 'bg-accent' : 'bg-neutral-700'
+              tabSelection2 === 'options' ? 'bg-accent' : 'bg-neutral-700',
             )}
             onClick={() => setTabSelection2('options')}
           >
             Options
           </div>
         </div>
-        <div className='w-full h-[50%] bg-neutral-700 p-2 text-sm text-white'>
-          {tabSelection2 === 'options' && <div>TODO</div>}
+        <div className="w-full h-[50%] bg-neutral-700 p-2 text-sm text-white">
+          {tabSelection2 === 'options' && <NoteOptions />}
         </div>
       </div>
     </>
