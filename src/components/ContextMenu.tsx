@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { copy, cut, deleteSelected, flipSelection, paste } from '../editor/draw'
+import {
+  connectHolds,
+  copy,
+  cut,
+  deleteSelected,
+  flipSelection,
+  paste,
+  repeatHoldMids,
+  shrinkSelectedDown,
+  shrinkSelectedUp,
+  splitHold,
+} from '../editor/draw'
 
 const ContextMenu = () => {
   const [isHidden, setIsHidden] = useState(true)
@@ -20,7 +31,7 @@ const ContextMenu = () => {
   const items = [
     {
       label: 'Delete',
-      action: deleteSelected,
+      action: () => deleteSelected(),
     },
     {
       type: 'separator',
@@ -69,46 +80,56 @@ const ContextMenu = () => {
     },
     {
       label: 'Shrink Up',
-      action: () => {},
+      action: () => shrinkSelectedUp(),
     },
     {
       label: 'Shrink Down',
-      action: () => {},
+      action: () => shrinkSelectedDown(),
     },
     {
       type: 'separator',
     },
     {
+      label: 'Repeat Hold Mids',
+      action: () => repeatHoldMids(),
+    },
+    {
       label: 'Connect Holds',
-      action: () => {},
+      action: () => connectHolds(),
     },
     {
       label: 'Split Hold',
-      action: () => {},
+      action: () => splitHold(),
     },
   ]
+
+  const height = items.reduce(
+    (s, x) => (x?.type === 'separator' ? s + 9 : s + 21),
+    0,
+  )
 
   return (
     <>
       <div
         className={twMerge(
           'p-1 rounded-md bg-neutral-800 border-1 border-neutral-700 text-white z-9999 fixed text-xs min-w-40 flex flex-col items-center justify-center',
-          isHidden && 'hidden'
+          isHidden && 'hidden',
         )}
         style={{
-          top: pos.y,
-          left: pos.x,
+          top:
+            Math.max(
+              30,
+              Math.min(pos.y, document.body.clientHeight - height - 30),
+            ) + 'px',
+          left: pos.x + 'px',
         }}
       >
         {items.map((i, idx) =>
           i.type === 'separator' ? (
-            <div
-              className='h-[1px] w-full m-1 bg-neutral-600'
-              key={idx}
-            />
+            <div className="h-[1px] w-full m-1 bg-neutral-600" key={idx} />
           ) : (
             <div
-              className='w-full px-2 py-0.5 rounded-sm hover:bg-neutral-700/50 text-xs text-neutral-300 hover:text-white'
+              className="w-full px-2 py-0.5 rounded-sm hover:bg-neutral-700/50 text-xs text-neutral-300 hover:text-white"
               onClick={() => {
                 i.action!()
                 setIsHidden(true)
@@ -117,13 +138,13 @@ const ContextMenu = () => {
             >
               {i.label}
             </div>
-          )
+          ),
         )}
       </div>
       <div
         className={twMerge(
           'w-screen h-screen fixed top-0 left-0 bottom-0 right-0 z-9998',
-          isHidden && 'hidden'
+          isHidden && 'hidden',
         )}
         onClick={() => setIsHidden(true)}
       />

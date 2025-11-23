@@ -24,17 +24,17 @@ const EditorFooter = ({
   // })
 
   return (
-    <div className='flex bg-neutral-700 text-sm text-white items-center justify-center px-1 absolute bottom-0 left-0 right-0 z-100'>
-      <div className='flex items-center justify-center p-0.5'>
-        <Rewind className='size-5 p-0.5' />
-        <Square className='size-5 p-0.5' />
-        <Play className='size-5 p-0.5' />
-        <FastForward className='size-5 p-0.5' />
+    <div className="flex bg-neutral-700 text-sm text-white items-center justify-center px-1 absolute bottom-0 left-0 right-0 z-100">
+      <div className="flex items-center justify-center p-0.5">
+        <Rewind className="size-5 p-0.5" />
+        <Square className="size-5 p-0.5" />
+        <Play className="size-5 p-0.5" />
+        <FastForward className="size-5 p-0.5" />
       </div>
       <select
         value={division}
         onChange={(e) => setDivision(parseInt(e.currentTarget.value))}
-        className='px-1 m-1 bg-neutral-800 rounded-xs outline-0 ring-0'
+        className="px-1 m-1 bg-neutral-800 rounded-xs outline-0 ring-0"
       >
         <option value={4}>4 Divison</option>
         <option value={8}>8 Divison</option>
@@ -47,22 +47,23 @@ const EditorFooter = ({
         <option value={96}>96 Divison</option>
         <option value={128}>128 Divison</option>
         <option value={192}>192 Divison</option>
+        <option value={1920}>1920 Divison</option>
       </select>
-      <div className='flex flex-1 items-center justify-center min-w-md'>
-        <ZoomOut className='size-5 p-0.5' />
+      <div className="flex flex-1 items-center justify-center min-w-md">
+        <ZoomOut className="size-5 p-0.5" />
         <input
-          type='range'
+          type="range"
           min={0.5}
           max={10.0}
           step={0.1}
           value={zoom}
-          data-suffix='x'
+          data-suffix="x"
           onChange={(e) => setZoom(parseFloat(e.currentTarget.value))}
-          className='slider px-1 m-1 bg-neutral-800 flex-12'
+          className="slider px-1 m-1 bg-neutral-800 flex-12"
         />
-        <ZoomIn className='size-5 p-0.5' />
+        <ZoomIn className="size-5 p-0.5" />
       </div>
-      <div className='flex-1 max-w-sm' />
+      <div className="flex-1 max-w-sm" />
     </div>
   )
 }
