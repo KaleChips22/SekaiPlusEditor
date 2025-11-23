@@ -69,7 +69,19 @@ let dragMode = DragMode.None
 export const nextNoteOptions = {
   size: 1.5,
   tickType: TickType.Normal,
+  easeType: EasingType.Linear,
   flickDir: FlickDirection.Default,
+}
+
+type NextNoteOptions = typeof nextNoteOptions
+
+export const setNextNoteOptions = (options: Partial<NextNoteOptions>) => {
+  for (const [k, v] of Object.entries(options) as [string, any]) {
+    if (k === 'size') nextNoteOptions.size = v
+    if (k === 'tickType') nextNoteOptions.tickType = v
+    if (k === 'easeType') nextNoteOptions.easeType = v
+    if (k === 'flickDir') nextNoteOptions.flickDir = v
+  }
 }
 
 let musicScoreName = ''
