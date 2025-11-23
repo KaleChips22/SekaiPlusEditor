@@ -2,6 +2,7 @@ import { clearHistory, setChartNotes, setMusicOffset } from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
 import { susToUSC } from './SUStoUSC'
+import { TimeSignature } from './note'
 // import { uscToLevelData } from './USCtoLevelData'
 
 let currentFilePath: string | null = null
@@ -27,6 +28,15 @@ export const openFile = () => {
         console.log(json)
         updateCurrentFilePath(null)
         const { notes, offset } = USCToNotes(json as any)
+
+        notes.push({
+          beat: 0,
+          lane: 0,
+          size: 0,
+          type: 'TimeSignature',
+          bottom: 4,
+          top: 4,
+        } as TimeSignature)
 
         setMusicOffset(offset)
         setChartNotes(notes)

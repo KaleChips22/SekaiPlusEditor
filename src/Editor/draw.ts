@@ -2062,7 +2062,7 @@ export const repeatHoldMids = () => {
   const holdEnd = patternEnd.nextNode as HoldEnd
 
   const patternHeight = patternEnd.beat - patternStart.beat
-  const itterations = Math.ceil(
+  const itterations = Math.floor(
     (holdEnd.beat - patternEnd.beat) / patternHeight,
   )
 
@@ -2070,7 +2070,7 @@ export const repeatHoldMids = () => {
 
   let prev = patternEnd as HoldTick
 
-  for (let i = 0; i < itterations; i++) {
+  for (let i = 0; i <= itterations; i++) {
     for (let j = 1; j < selection.length; j++) {
       const currentRep = selection[j] as HoldStart | HoldTick
 
@@ -2082,7 +2082,7 @@ export const repeatHoldMids = () => {
         6 - currentRep.size / 2,
       )
 
-      if (j === selection.length - 1 && i === itterations - 1) {
+      if (j === selection.length - 1 && i === itterations) {
         holdEnd.beat = currentRep.beat + patternHeight * i
         holdEnd.lane = lane
         holdEnd.size = currentRep.size
@@ -2262,7 +2262,8 @@ const draw = (timeStamp: number) => {
       const groupRight = Math.max(
         ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
       )
-      const groupCenter = (groupLeft + groupRight) / 2
+      let groupCenter = (groupLeft + groupRight) / 2
+      groupCenter = Math.floor(groupCenter * 2) / 2
       const desiredLaneOffset = rawLaneOffset - groupCenter
 
       const allowedLows: number[] = []
@@ -2969,7 +2970,8 @@ const draw = (timeStamp: number) => {
         const groupRight = Math.max(
           ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
         )
-        const groupCenter = (groupLeft + groupRight) / 2
+        let groupCenter = (groupLeft + groupRight) / 2
+        groupCenter = Math.floor(groupCenter * 2) / 2
         const desiredLaneOffset = rawLaneOffset - groupCenter
 
         // For each note determine allowed laneOffset range so the note stays within -3..3
