@@ -7,6 +7,7 @@ import {
   deleteSelected,
   flipSelection,
   paste,
+  repeatHoldMids,
   shrinkSelectedDown,
   shrinkSelectedUp,
   splitHold,
@@ -87,6 +88,10 @@ const ContextMenu = () => {
     },
     {
       type: 'separator',
+    },
+    {
+      label: 'Repeat Hold Mids',
+      action: () => repeatHoldMids(),
     },
     {
       label: 'Connect Holds',

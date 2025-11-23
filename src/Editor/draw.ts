@@ -362,6 +362,8 @@ export const setChartNotes = (notes: Note[]) => {
   chartNotes.splice(0)
 
   notes.forEach((n) => chartNotes.push(n))
+
+  _eventOffsetCache = computeEventOffsets()
 }
 
 /**
@@ -380,7 +382,6 @@ export const undo = () => {
     setChartNotes(previousState)
     selectedIndeces.clear()
   }
-  _eventOffsetCache = computeEventOffsets()
 }
 
 /**
@@ -392,7 +393,6 @@ export const redo = () => {
     setChartNotes(nextState)
     selectedIndeces.clear()
   }
-  _eventOffsetCache = computeEventOffsets()
 }
 
 /**
@@ -504,8 +504,8 @@ export const savePJSK = () => {
 
 const selectedIndeces = new Set<number>()
 
-export const deleteSelected = () => {
-  saveHistory()
+export const deleteSelected = (skipSave: boolean = false) => {
+  if (!skipSave) saveHistory()
   chartNotes.forEach((n, i) => {
     if (!selectedIndeces.has(i)) return
     if (n.type === 'HoldStart') {
@@ -1921,6 +1921,186 @@ export const shrinkSelectedDown = () => {
   const minBeat = Math.min(...notes.map((x) => x.beat))
 
   notes.forEach((n, i) => (n.beat = minBeat + i * TICK_SIZE))
+}
+
+export const splitHold = () => {
+  const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
+  if (selection.length !== 1) return
+  const note = selection[0] as HoldTick
+  if (note.type !== 'HoldTick') return
+
+  saveHistory()
+  let prev: HoldTick | HoldStart = note.prevNode
+  const beforeNotes = [prev]
+  while ('prevNode' in prev && prev.type === 'HoldTick') {
+    prev = prev.prevNode
+    beforeNotes.push(prev)
+  }
+  let next: HoldTick | HoldEnd = note.nextNode
+  const afterNotes = [next]
+  while ('nextNode' in next) {
+    next = next.nextNode
+    afterNotes.push(next)
+  }
+
+  const oldStart = beforeNotes.filter((x) => x.type === 'HoldStart')[0]
+  const newStart = { ...oldStart } as HoldStart
+  newStart.beat = note.beat
+  newStart.lane = note.lane
+  newStart.size = note.size
+  newStart.easingType = note.easingType
+  newStart.nextNode = afterNotes.sort((a, b) => a.beat - b.beat)[0]
+  newStart.nextNode.prevNode = newStart
+
+  const oldEnd = afterNotes.filter((x) => x.type === 'HoldEnd')[0]
+  const newEnd = { ...oldEnd } as HoldEnd
+  newEnd.beat = note.beat
+  newEnd.lane = note.lane
+  newEnd.size = note.size
+  newEnd.prevNode = beforeNotes.sort((a, b) => b.beat - a.beat)[0]
+  newEnd.prevNode.nextNode = newEnd
+
+  const i = chartNotes.indexOf(note)
+  chartNotes.splice(i, 1)
+
+  chartNotes.push(newStart, newEnd)
+
+  selectedIndeces.clear()
+}
+
+export const connectHolds = () => {
+  const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
+  if (selection.length !== 2) return
+  if (selection.filter((x) => x.type === 'HoldStart').length !== 1) return
+  if (selection.filter((x) => x.type === 'HoldEnd').length !== 1) return
+
+  const start = selection.filter((x) => x.type === 'HoldStart')[0] as HoldStart
+  const end = selection.filter((x) => x.type === 'HoldEnd')[0] as HoldEnd
+
+  if (start.isGold !== end.prevNode.isGold) return
+  if (start.isGuide !== end.prevNode.isGuide) return
+
+  saveHistory()
+
+  const newStartTick = {
+    beat: start.beat,
+    lane: start.lane,
+    size: start.size,
+    easingType: start.easingType,
+    isGold: start.isGold,
+    isGuide: start.isGuide,
+    nextNode: start.nextNode,
+    type: 'HoldTick',
+    tickType: TickType.Normal,
+  } as HoldTick
+  const newEndTick = {
+    beat: end.beat,
+    lane: end.lane,
+    size: end.size,
+    easingType: EasingType.Linear,
+    isGuide: start.isGuide,
+    isGold: end.isGold,
+    prevNode: end.prevNode,
+    nextNode: newStartTick,
+    type: 'HoldTick',
+    tickType: TickType.Normal,
+  } as HoldTick
+
+  newStartTick.prevNode = newEndTick
+  start.nextNode.prevNode = newStartTick
+  end.prevNode.nextNode = newEndTick
+
+  const si = chartNotes.indexOf(start)
+  chartNotes.splice(si, 1)
+  const ei = chartNotes.indexOf(end)
+  chartNotes.splice(ei, 1)
+
+  chartNotes.push(newStartTick, newEndTick)
+
+  selectedIndeces.clear()
+
+  sortHold(newStartTick)
+}
+
+export const repeatHoldMids = () => {
+  const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
+  if (selection.length < 3) return
+  if (
+    selection.filter((x) => !['HoldStart', 'HoldTick'].includes(x.type))
+      .length > 0
+  )
+    return false
+
+  if (selection.filter((n) => n.type === 'HoldStart').length > 1) return false
+
+  saveHistory()
+
+  selection.sort((a, b) => a.beat - b.beat)
+
+  const patternStart = selection[0] as HoldStart | HoldTick
+  const patternEnd = selection[selection.length - 1] as HoldTick
+
+  selectedIndeces.clear()
+
+  while (patternEnd.nextNode.type === 'HoldTick') {
+    selectedIndeces.add(chartNotes.indexOf(patternEnd.nextNode))
+    deleteSelected()
+  }
+
+  const holdEnd = patternEnd.nextNode as HoldEnd
+
+  const patternHeight = patternEnd.beat - patternStart.beat
+  const itterations = Math.ceil(
+    (holdEnd.beat - patternEnd.beat) / patternHeight,
+  )
+
+  patternEnd.easingType = patternStart.easingType
+
+  let prev = patternEnd as HoldTick
+
+  for (let i = 0; i < itterations; i++) {
+    for (let j = 1; j < selection.length; j++) {
+      const currentRep = selection[j] as HoldStart | HoldTick
+
+      const lane = Math.min(
+        Math.max(
+          currentRep.lane + i * (patternEnd.lane - patternStart.lane),
+          -6 + currentRep.size / 2,
+        ),
+        6 - currentRep.size / 2,
+      )
+
+      if (j === selection.length - 1 && i === itterations - 1) {
+        holdEnd.beat = currentRep.beat + patternHeight * i
+        holdEnd.lane = lane
+        holdEnd.size = currentRep.size
+        holdEnd.prevNode = prev
+        prev.nextNode = holdEnd
+        continue
+      }
+
+      const nextMid = {
+        type: 'HoldTick',
+        beat: currentRep.beat + patternHeight * i,
+        lane,
+        size: currentRep.size,
+        easingType: currentRep.easingType,
+        prevNode: prev,
+        tickType:
+          'tickType' in currentRep ? currentRep.tickType : TickType.Normal,
+      } as HoldTick
+
+      prev.nextNode = nextMid
+      prev = nextMid
+
+      nextMid.isGold = patternStart.isGold
+      nextMid.isGuide = patternStart.isGuide
+
+      chartNotes.push(nextMid)
+    }
+  }
+
+  sortHold(holdEnd)
 }
 
 const draw = (timeStamp: number) => {
