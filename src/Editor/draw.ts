@@ -1235,6 +1235,8 @@ const drawDivisions = (
   segments: { start: number; end: number; top: number; bottom: number }[],
 ) => {
   if (ctx === null) return
+  let div = globalState.division
+  if (globalState.division >= 192) div = 4
   // Draw division lines by iterating subdivision indices per time-signature segment.
   // This avoids floating-point accumulation by using integer subdivision indices (k).
 
@@ -1252,16 +1254,14 @@ const drawDivisions = (
     if (!(segStart <= segEnd)) continue
 
     // subdivisions per quarter-beat (keep beat unit as quarter notes)
-    const subsPerBeat = globalState.division / 4
+    const subsPerBeat = div / 4
 
     // integer subdivision indices that lie in this segment
     const kStart = Math.ceil(segStart * subsPerBeat - 1e-9)
     const kEnd = Math.floor(segEnd * subsPerBeat + 1e-9)
 
     // measure width in subdivisions: division * top / bottom
-    const measureSubCount = Math.round(
-      (globalState.division * seg.top) / seg.bottom,
-    )
+    const measureSubCount = Math.round((div * seg.top) / seg.bottom)
 
     // offset in subdivision units where this segment starts (so kRelative resets to 0 at segment start)
     const segOffsetK = Math.round(seg.start * subsPerBeat)
@@ -1284,7 +1284,7 @@ const drawDivisions = (
       // determine whether this line falls exactly on a beat according to the time-signature bottom
       // use kRelative (subdivision index relative to segment start) so beat lines reset per segment
       // beatTimesFactor = kRelative * seg.bottom / division -> integer when on a beat
-      const beatTimesFactor = (kRelative * seg.bottom) / globalState.division
+      const beatTimesFactor = (kRelative * seg.bottom) / div
       const isBeatLine =
         kRelative >= 0 &&
         Math.abs(Math.round(beatTimesFactor) - beatTimesFactor) < 1e-9
