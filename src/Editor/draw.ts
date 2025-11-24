@@ -50,6 +50,10 @@ let isPasting = false
 let hideTickOutlines = false
 let hideTickOutlinesOnPlay = true
 
+// let isShiftPressed = false
+let isCtrlPressed = false
+let isAltPressed = false
+
 export const setOptions = (options: any) => {
   for (const [k, v] of Object.entries(options) as [string, any]) {
     if (k === 'hideTickOutlines') hideTickOutlines = v
@@ -960,6 +964,20 @@ document.addEventListener('wheel', (e) => {
   yOffset -= e.deltaY
 })
 
+document.addEventListener('keydown', (e) => {
+  // if (e.key === 'Shift') {
+  //   isShiftPressed = true
+  // }
+
+  if (e.key === 'Control' || e.key === 'Meta') {
+    isCtrlPressed = true
+  }
+
+  if (e.key === 'Alt') {
+    isAltPressed = true
+  }
+})
+
 document.addEventListener('keyup', (e) => {
   if (e.key === 'Enter') {
     yOffset = -150
@@ -969,6 +987,18 @@ document.addEventListener('keyup', (e) => {
 
   if (e.key === ' ') {
     toggleIsPlaying()
+  }
+
+  // if (e.key === 'Shift') {
+  //   isShiftPressed = false
+  // }
+
+  if (e.key === 'Control' || e.key === 'Meta') {
+    isCtrlPressed = false
+  }
+
+  if (e.key === 'Alt') {
+    isAltPressed = false
   }
 })
 
@@ -2385,10 +2415,16 @@ const draw = (timeStamp: number) => {
       notesAtPos.length <= 0 ||
       !selectedIndeces.has(chartNotes.indexOf(notesAtPos[0]))
     ) {
-      selectedIndeces.clear()
+      if (!isCtrlPressed && !isAltPressed) {
+        selectedIndeces.clear()
+      }
       if (notesAtPos.length !== 0) {
         const note = notesAtPos[0]
-        selectedIndeces.add(chartNotes.indexOf(note))
+        if (isAltPressed) {
+          selectedIndeces.delete(chartNotes.indexOf(note))
+        } else {
+          selectedIndeces.add(chartNotes.indexOf(note))
+        }
 
         if (globalState.selectedTool === 0) {
           dragStartX = mouseX
@@ -2732,6 +2768,10 @@ const draw = (timeStamp: number) => {
       const minBeat = getBeatFromMouse(MY)
       const maxBeat = getBeatFromMouse(mY)
 
+      if (!isAltPressed && !isCtrlPressed) {
+        selectedIndeces.clear()
+      }
+
       chartNotes
         .filter((n) => {
           if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
@@ -2751,7 +2791,13 @@ const draw = (timeStamp: number) => {
             n.lane + n.size / 2 >= minLane
           )
         })
-        .forEach((n) => selectedIndeces.add(chartNotes.indexOf(n)))
+        .forEach((n) => {
+          if (isAltPressed) {
+            selectedIndeces.delete(chartNotes.indexOf(n))
+          } else {
+            selectedIndeces.add(chartNotes.indexOf(n))
+          }
+        })
 
       selectionStartX = null
       selectionStartY = null
