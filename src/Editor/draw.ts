@@ -18,20 +18,27 @@ import { notesToPJSK } from './PJSK'
 import { notesToUSC } from './USC'
 import { historyManager } from './history'
 import { USCtoLevelData } from './USCtoLevelData'
+import {
+  disableCachedScaledTimes,
+  hasCachedScaledTimes,
+  updateBox,
+} from '../preview/draw'
 
 const BEAT_HEIGHT = 220
-
-let laneWidth = 55
+export let laneWidth = 55
 const NOTE_HEIGHT = 45
 
 // let tSigTop = 4
 // let tSigBottom = 4
-let yOffset = 0
+export let yOffset = 0
 let pZoom = 0
 
-let cursorPos = 0
+export let cursorPos = 0
+export const setCursorPos = (p: number) => (cursorPos = p)
 
-let isPlaying = false
+export let isPlaying = false
+export let isPreviewing = false
+export const setPreviewing = (p: boolean) => (isPreviewing = p)
 
 let mouseIsPressed = false
 let pMouseIsPressed = false
@@ -127,7 +134,7 @@ const initSounds = async () => {
   longBuffer = await loadSound('sound/note_sfx/se_live_long.mp3', longContext)
   longGoldBuffer = await loadSound(
     'sound/note_sfx/se_live_long_critical.mp3',
-    longGoldContext,
+    longGoldContext
   )
 }
 
@@ -229,7 +236,7 @@ export const setMusic = (file: File) => {
     // decode audio into PCM and precompute waveform buckets
     try {
       const audioBuffer = await longContext.decodeAudioData(
-        arrayBuffer.slice(0),
+        arrayBuffer.slice(0)
       )
 
       waveformDuration = audioBuffer.duration
@@ -276,7 +283,7 @@ export const setMusic = (file: File) => {
 const imageSource = document.createElement('img')
 imageSource.src = 'editor_sprites/notes.png'
 
-const chartNotes: Note[] = [
+export const chartNotes: Note[] = [
   {
     type: 'HiSpeed',
     beat: 0,
@@ -375,6 +382,7 @@ const chartNotes: Note[] = [
 ]
 
 export const setChartNotes = (notes: Note[]) => {
+  disableCachedScaledTimes()
   chartNotes.splice(0)
 
   notes.forEach((n) => chartNotes.push(n))
@@ -386,6 +394,7 @@ export const setChartNotes = (notes: Note[]) => {
  * Save the current chart state to history before making modifications
  */
 const saveHistory = () => {
+  if (isPreviewing) return
   historyManager.saveState(chartNotes)
 }
 
@@ -393,6 +402,8 @@ const saveHistory = () => {
  * Undo the last action
  */
 export const undo = () => {
+  if (isPreviewing) return
+
   const previousState = historyManager.undo(chartNotes)
   if (previousState) {
     setChartNotes(previousState)
@@ -404,6 +415,8 @@ export const undo = () => {
  * Redo the last undone action
  */
 export const redo = () => {
+  if (isPreviewing) return
+
   const nextState = historyManager.redo(chartNotes)
   if (nextState) {
     setChartNotes(nextState)
@@ -414,12 +427,12 @@ export const redo = () => {
 /**
  * Check if undo is available
  */
-export const canUndo = () => historyManager.canUndo()
+export const canUndo = () => !isPreviewing && historyManager.canUndo()
 
 /**
  * Check if redo is available
  */
-export const canRedo = () => historyManager.canRedo()
+export const canRedo = () => !isPreviewing && historyManager.canRedo()
 
 /**
  * Clear all history (useful when opening a new file)
@@ -445,7 +458,7 @@ export const exportUSC = async () => {
   })
 
   const compressedLevelData = readableStream.pipeThrough(
-    new CompressionStream('gzip'),
+    new CompressionStream('gzip')
   )
 
   const compressedBytes = await new Response(compressedLevelData).bytes()
@@ -454,7 +467,7 @@ export const exportUSC = async () => {
   const result = await window.ipcRenderer.exportChart(
     uscContent,
     compressedBytes,
-    musicScoreName || 'Untitled',
+    musicScoreName || 'Untitled'
   )
 
   if (result && !result.success && !result.canceled) {
@@ -521,7 +534,18 @@ export const savePJSK = () => {
 const selectedIndeces = new Set<number>()
 
 export const deleteSelected = (skipSave: boolean = false) => {
+  if (isPreviewing) return
+
   if (!skipSave) saveHistory()
+
+  // Check if any deleted notes are HiSpeed changes
+  let hasHiSpeedChanges = false
+  chartNotes.forEach((n, i) => {
+    if (selectedIndeces.has(i) && n.type === 'HiSpeed') {
+      hasHiSpeedChanges = true
+    }
+  })
+
   chartNotes.forEach((n, i) => {
     if (!selectedIndeces.has(i)) return
     if (n.type === 'HoldStart') {
@@ -547,9 +571,15 @@ export const deleteSelected = (skipSave: boolean = false) => {
     if (selectedIndeces.has(i)) chartNotes.splice(i, 1)
   }
   selectedIndeces.clear()
+
+  if (hasHiSpeedChanges) {
+    disableCachedScaledTimes()
+  }
 }
 
 export const selectAll = () => {
+  if (isPreviewing) return
+
   for (let i = 0; i < chartNotes.length; i++) {
     if (!['BPMChange', 'HiSpeed', 'TimeSignature'].includes(chartNotes[i].type))
       selectedIndeces.add(i)
@@ -557,6 +587,8 @@ export const selectAll = () => {
 }
 
 export const setHiSpeed = (speed: number) => {
+  if (isPreviewing) return
+
   if (selectedIndeces.size === 1) {
     saveHistory()
     selectedIndeces.forEach((i) => {
@@ -567,6 +599,7 @@ export const setHiSpeed = (speed: number) => {
 
       n.speed = speed
     })
+    disableCachedScaledTimes()
   }
 }
 
@@ -587,6 +620,8 @@ export const getDefaultHiSpeed = () => {
 }
 
 export const setBPM = (BPM: number) => {
+  if (isPreviewing) return
+
   if (selectedIndeces.size === 1) {
     saveHistory()
     selectedIndeces.forEach((i) => {
@@ -617,6 +652,8 @@ export const getDefaultBPM = () => {
 }
 
 export const setTimeSignature = (top: number, bottom: number) => {
+  if (isPreviewing) return
+
   if (selectedIndeces.size === 1) {
     saveHistory()
     selectedIndeces.forEach((i) => {
@@ -647,20 +684,30 @@ export const getDefaultTimeSignature = () => {
   return tSig
 }
 
-const flipNotes = (notes: Note[]) => notes.forEach((n) => (n.lane *= -1))
+const flipNotes = (notes: Note[]) => {
+  if (isPreviewing) return
+
+  notes.forEach((n) => (n.lane *= -1))
+}
 
 export const flipSelection = () => {
+  if (isPreviewing) return
+
   saveHistory()
   selectedIndeces.forEach((i) => (chartNotes[i].lane *= -1))
 }
 
 export const paste = (flip: boolean = false) => {
+  if (isPreviewing) return
+
   if (flip) flipNotes(clipboard)
 
   isPasting = true
 }
 
 export const copy = () => {
+  if (isPreviewing) return
+
   clipboard.splice(0)
 
   // Ensure full hold chains are included in the selection when copying.
@@ -697,7 +744,7 @@ export const copy = () => {
 
   // Build an ordered list of selected notes (stable by chart order)
   const selectedIndicesOrdered = Array.from(selectedIndeces).sort(
-    (a, b) => a - b,
+    (a, b) => a - b
   )
   const selectedNotes = selectedIndicesOrdered.map((i) => chartNotes[i])
 
@@ -828,6 +875,8 @@ export const copy = () => {
 }
 
 export const cut = () => {
+  if (isPreviewing) return
+
   copy()
   deleteSelected()
 }
@@ -961,7 +1010,12 @@ document.addEventListener('mouseup', () => (mouseIsPressed = false))
 
 document.addEventListener('wheel', (e) => {
   // e.preventDefault()
-  yOffset -= e.deltaY
+  if (isPreviewing) {
+    cursorPos -= (e.deltaY * getBPM(cursorPos)) / 10000
+    cursorPos = Math.max(0, cursorPos)
+  } else {
+    yOffset -= e.deltaY
+  }
 })
 
 document.addEventListener('keydown', (e) => {
@@ -1002,7 +1056,7 @@ document.addEventListener('keyup', (e) => {
   }
 })
 
-const getBPM = (beat: number) => {
+export const getBPM = (beat: number) => {
   return (
     chartNotes
       .filter((n) => n.type === 'BPMChange')
@@ -1011,7 +1065,7 @@ const getBPM = (beat: number) => {
   ).BPM
 }
 
-const getTsig = (beat: number) => {
+export const getTsig = (beat: number) => {
   const tSig = chartNotes
     .filter((n) => n.type === 'TimeSignature')
     .filter((n) => n.beat <= beat)
@@ -1023,10 +1077,10 @@ const getTsig = (beat: number) => {
   }
 }
 
-const getTime = (beat: number) => {
+export const getTime = (beat: number) => {
   let time = 0
   const changes = chartNotes.filter(
-    (n) => n.type === 'BPMChange' && n.beat < beat,
+    (n) => n.type === 'BPMChange' && n.beat < beat
   )
 
   for (let i = 0; i < changes.length; i++) {
@@ -1044,8 +1098,58 @@ const getTime = (beat: number) => {
   return time
 }
 
-const guideColor = '#38e584'
-const goldGuideColor = '#ffcd36'
+export const getScaledTime = (beat: number) => {
+  let time = 0
+  let currentBeat = 0
+  let speed = 1
+  let bpm = 160
+
+  // Get all BPM and HiSpeed changes up to the target beat, sorted by beat
+  const changes = chartNotes
+    .filter(
+      (n) => (n.type === 'BPMChange' || n.type === 'HiSpeed') && n.beat <= beat
+    )
+    .sort((a, b) => a.beat - b.beat)
+
+  for (const change of changes) {
+    // Calculate time for segment from currentBeat to this change's beat
+    if (change.beat > currentBeat) {
+      const segmentBeats = change.beat - currentBeat
+      time += (speed * (segmentBeats * 60)) / bpm
+    }
+
+    // Update current state based on the change type
+    if (change.type === 'HiSpeed') {
+      speed = (change as HiSpeed).speed
+    } else {
+      bpm = (change as BPMChange).BPM
+    }
+
+    currentBeat = change.beat
+  }
+
+  // Calculate time for final segment from last change to target beat
+  if (beat > currentBeat) {
+    const segmentBeats = beat - currentBeat
+    time += (speed * (segmentBeats * 60)) / bpm
+  }
+
+  return time
+}
+
+export const getHiSpeed = (beat: number) => {
+  return (
+    (
+      chartNotes
+        .filter((n) => n.type === 'HiSpeed')
+        .filter((n) => n.beat <= beat)
+        .sort((a, b) => b.beat - a.beat)[0] as HiSpeed
+    )?.speed || 1
+  )
+}
+
+export const guideColor = '#38e584'
+export const goldGuideColor = '#ffcd36'
 
 let lastTime: number
 const globalState: globalState = {
@@ -1054,17 +1158,23 @@ const globalState: globalState = {
   zoom: 1,
 }
 
-let width = 100,
+export let width = 100,
   height = 100
-export const setWidth = (w: number) => (width = w)
-export const setHeight = (h: number) => (height = h)
+export const setWidth = (w: number) => {
+  width = w
+  updateBox()
+}
+export const setHeight = (h: number) => {
+  height = h
+  updateBox()
+}
 
 export let ctx: CanvasRenderingContext2D | null = null
 
 export const setCtx = (c: CanvasRenderingContext2D) => (ctx = c)
 export const setGlobalState = (g: Partial<globalState>) => {
   Object.entries(g).forEach(
-    ([k, v]) => (globalState[k as keyof globalState] = v),
+    ([k, v]) => (globalState[k as keyof globalState] = v)
   )
 }
 
@@ -1124,7 +1234,7 @@ const getPixelsFromZero = (beat: number): number => {
 
 const getLaneFromMouse = (mouseX: number): number =>
   Math.round(
-    Math.max(-3, Math.min(3, (mouseX - width / 2) / (laneWidth * 2))) * 2,
+    Math.max(-3, Math.min(3, (mouseX - width / 2) / (laneWidth * 2))) * 2
   ) / 2
 
 const getNearestDivision = (beat: number): number => {
@@ -1134,7 +1244,7 @@ const getNearestDivision = (beat: number): number => {
 }
 
 const getEventSize = (
-  event: BPMChange | TimeSignature | HiSpeed,
+  event: BPMChange | TimeSignature | HiSpeed
 ): { width: number; height: number } => {
   const fontSize = '24px'
   const fontFamily = 'Arial'
@@ -1147,8 +1257,8 @@ const getEventSize = (
     event.type === 'HiSpeed'
       ? `${(event as HiSpeed).speed}x`
       : event.type === 'BPMChange'
-        ? `${(event as BPMChange).BPM} BPM`
-        : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
+      ? `${(event as BPMChange).BPM} BPM`
+      : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
   document.body.appendChild(textEl)
   const { width: textWidth, height: textHeight } =
     textEl.getBoundingClientRect()
@@ -1274,7 +1384,7 @@ const drawLanes = () => {
 }
 
 const drawDivisions = (
-  segments: { start: number; end: number; top: number; bottom: number }[],
+  segments: { start: number; end: number; top: number; bottom: number }[]
 ) => {
   if (ctx === null) return
   let div = globalState.division
@@ -1349,7 +1459,7 @@ const drawDivisions = (
         ctx.fillText(
           measureIndex.toString(),
           width / 2 - 6 * laneWidth - 20,
-          y + 30,
+          y + 30
         )
       } else if (isBeatLine) {
         // full beat lines are more visible than subdivisions
@@ -1442,7 +1552,7 @@ const drawWaveform = () => {
   ctx.fill()
 }
 
-const getNoteImageName = (n: Note): string => {
+export const getNoteImageName = (n: Note): string => {
   let noteImageName = 'notes_2'
   if (n.type === 'HoldTick') return 'tick'
   else if (n.type === 'Tap') {
@@ -1642,7 +1752,7 @@ const drawNote = (n: Note) => {
       x1,
       y,
       w1,
-      h,
+      h
     )
 
     // last part
@@ -1655,7 +1765,7 @@ const drawNote = (n: Note) => {
       x3,
       y,
       w3,
-      h,
+      h
     )
 
     // middle part
@@ -1668,7 +1778,7 @@ const drawNote = (n: Note) => {
       x2,
       y,
       w2,
-      h,
+      h
     )
   }
 
@@ -1721,8 +1831,8 @@ const drawNote = (n: Note) => {
           pN.easingType === EasingType.EaseIn
             ? Math.pow(percentY, 2)
             : pN.easingType === EasingType.EaseOut
-              ? 1 - Math.pow(1 - percentY, 2)
-              : percentY
+            ? 1 - Math.pow(1 - percentY, 2)
+            : percentY
         tx =
           (width - tw) / 2 +
           ((1 - easedY) * pN.lane + easedY * nN.lane) * 2 * laneWidth
@@ -1739,7 +1849,7 @@ const drawNote = (n: Note) => {
         tx,
         ty,
         tw,
-        th,
+        th
       )
     }
   }
@@ -1792,7 +1902,7 @@ const drawFlickArrow = (n: Note) => {
         fx,
         fy,
         fw,
-        fh,
+        fh
       )
 
       if (note.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
@@ -1849,7 +1959,7 @@ const drawHoldLine = (n: Note) => {
       startX + startW,
       (startY + endY) / 2,
       endX + endW,
-      endY,
+      endY
     )
   else if (note.easingType === EasingType.EaseOut)
     ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
@@ -1858,26 +1968,26 @@ const drawHoldLine = (n: Note) => {
       startX + startW,
       (startY + (startY + endY) / 2) / 2,
       (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + endY) / 2,
+      (startY + endY) / 2
     )
     ctx.quadraticCurveTo(
       endX + endW,
       ((startY + endY) / 2 + endY) / 2,
       endX + endW,
-      endY,
+      endY
     )
   } else if (note.easingType === EasingType.EaseOutIn) {
     ctx.quadraticCurveTo(
       (startX + endX) / 2 + (startW + endW) / 2,
       (startY + (startY + endY) / 2) / 2,
       (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + endY) / 2,
+      (startY + endY) / 2
     )
     ctx.quadraticCurveTo(
       (startX + endX) / 2 + (startW + endW) / 2,
       ((startY + endY) / 2 + endY) / 2,
       endX + endW,
-      endY,
+      endY
     )
   } else ctx.lineTo(endX + endW, endY)
 
@@ -1891,26 +2001,26 @@ const drawHoldLine = (n: Note) => {
       endX,
       ((startY + endY) / 2 + endY) / 2,
       (startX + endX) / 2,
-      (startY + endY) / 2,
+      (startY + endY) / 2
     )
     ctx.quadraticCurveTo(
       startX,
       (startY + (endY + startY) / 2) / 2,
       startX,
-      startY,
+      startY
     )
   } else if (note.easingType === EasingType.EaseOutIn) {
     ctx.quadraticCurveTo(
       (startX + endX) / 2,
       ((startY + endY) / 2 + endY) / 2,
       (startX + endX) / 2,
-      (startY + endY) / 2,
+      (startY + endY) / 2
     )
     ctx.quadraticCurveTo(
       (endX + startX) / 2,
       (startY + (endY + startY) / 2) / 2,
       startX,
-      startY,
+      startY
     )
   } else ctx.lineTo(startX, startY)
 
@@ -1924,11 +2034,11 @@ const drawHoldLine = (n: Note) => {
     const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
     guideGradient.addColorStop(
       0,
-      (note.isGold ? goldGuideColor : guideColor) + 'bb',
+      (note.isGold ? goldGuideColor : guideColor) + 'bb'
     )
     guideGradient.addColorStop(
       1,
-      (note.isGold ? goldGuideColor : guideColor) + '33',
+      (note.isGold ? goldGuideColor : guideColor) + '33'
     )
     ctx.fillStyle = guideGradient
   } else {
@@ -1942,6 +2052,8 @@ const TICKS_PER_BEAT = 480
 const TICK_SIZE = 1 / TICKS_PER_BEAT
 
 export const shrinkSelectedUp = () => {
+  if (isPreviewing) return
+
   saveHistory()
   if (selectedIndeces.size <= 0) return
 
@@ -1954,6 +2066,8 @@ export const shrinkSelectedUp = () => {
 }
 
 export const shrinkSelectedDown = () => {
+  if (isPreviewing) return
+
   saveHistory()
   if (selectedIndeces.size <= 0) return
 
@@ -1966,6 +2080,8 @@ export const shrinkSelectedDown = () => {
 }
 
 export const splitHold = () => {
+  if (isPreviewing) return
+
   const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
   if (selection.length !== 1) return
   const note = selection[0] as HoldTick
@@ -2011,6 +2127,8 @@ export const splitHold = () => {
 }
 
 export const connectHolds = () => {
+  if (isPreviewing) return
+
   const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
   if (selection.length !== 2) return
   if (selection.filter((x) => x.type === 'HoldStart').length !== 1) return
@@ -2065,6 +2183,8 @@ export const connectHolds = () => {
 }
 
 export const repeatHoldMids = () => {
+  if (isPreviewing) return
+
   const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
   if (selection.length < 3) return
   if (
@@ -2093,7 +2213,7 @@ export const repeatHoldMids = () => {
 
   const patternHeight = patternEnd.beat - patternStart.beat
   const itterations = Math.floor(
-    (holdEnd.beat - patternEnd.beat) / patternHeight,
+    (holdEnd.beat - patternEnd.beat) / patternHeight
   )
 
   patternEnd.easingType = patternStart.easingType
@@ -2107,9 +2227,9 @@ export const repeatHoldMids = () => {
       const lane = Math.min(
         Math.max(
           currentRep.lane + i * (patternEnd.lane - patternStart.lane),
-          -6 + currentRep.size / 2,
+          -6 + currentRep.size / 2
         ),
-        6 - currentRep.size / 2,
+        6 - currentRep.size / 2
       )
 
       if (j === selection.length - 1 && i === itterations) {
@@ -2150,6 +2270,8 @@ const draw = (timeStamp: number) => {
   if (lastTime == undefined) lastTime = timeStamp
   const deltaTime = timeStamp - lastTime
 
+  if (hasCachedScaledTimes) disableCachedScaledTimes()
+
   // build tsig segments
   const segments = buildSegments()
 
@@ -2169,7 +2291,7 @@ const draw = (timeStamp: number) => {
       if (
         dragMode === DragMode.Move &&
         chartNotes.filter(
-          (n, i) => selectedIndeces.has(i) && n.lane - n.size / 2 <= -2.75,
+          (n, i) => selectedIndeces.has(i) && n.lane - n.size / 2 <= -2.75
         ).length === 0
       )
         chartNotes
@@ -2180,7 +2302,7 @@ const draw = (timeStamp: number) => {
         chartNotes.filter(
           (n, i) =>
             selectedIndeces.has(i) &&
-            (n.size > 5.5 || n.lane - n.size / 2 <= -3),
+            (n.size > 5.5 || n.lane - n.size / 2 <= -3)
         ).length === 0
       )
         chartNotes
@@ -2207,7 +2329,7 @@ const draw = (timeStamp: number) => {
       if (
         dragMode === DragMode.Move &&
         chartNotes.filter(
-          (n, i) => selectedIndeces.has(i) && n.lane + n.size / 2 >= 2.75,
+          (n, i) => selectedIndeces.has(i) && n.lane + n.size / 2 >= 2.75
         ).length === 0
       )
         chartNotes
@@ -2228,8 +2350,7 @@ const draw = (timeStamp: number) => {
         dragMode === DragMode.ScaleRight &&
         chartNotes.filter(
           (n, i) =>
-            selectedIndeces.has(i) &&
-            (n.size > 5.5 || n.lane + n.size / 2 >= 3),
+            selectedIndeces.has(i) && (n.size > 5.5 || n.lane + n.size / 2 >= 3)
         ).length === 0
       )
         chartNotes
@@ -2259,7 +2380,7 @@ const draw = (timeStamp: number) => {
           chartNotes.filter(
             (n, i) =>
               selectedIndeces.has(i) &&
-              n.beat < (4 / globalState.division) * itter,
+              n.beat < (4 / globalState.division) * itter
           ).length === 0
         ) {
           dragStartY += divisionHeight * itter
@@ -2287,10 +2408,10 @@ const draw = (timeStamp: number) => {
       const rawLaneOffset = getLaneFromMouse(mouseX!)
 
       const groupLeft = Math.min(
-        ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2),
+        ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2)
       )
       const groupRight = Math.max(
-        ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
+        ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2)
       )
       let groupCenter = (groupLeft + groupRight) / 2
       groupCenter = Math.floor(groupCenter * 2) / 2
@@ -2404,7 +2525,7 @@ const draw = (timeStamp: number) => {
       })
       .filter(
         (item): item is { note: Note; index: number; distance: number } =>
-          item !== null,
+          item !== null
       )
       .sort((a, b) => a.distance - b.distance) // Sort by distance, closest first
 
@@ -2566,17 +2687,17 @@ const draw = (timeStamp: number) => {
             -3 + nextNoteOptions.size / 2,
             Math.floor(
               (mouseX - width / 2) / laneWidth +
-                (nextNoteOptions.size % 1 === 0 ? 0.5 : 0),
+                (nextNoteOptions.size % 1 === 0 ? 0.5 : 0)
             ) /
               2 +
-              (nextNoteOptions.size % 1 === 0 ? 0 : 0.25),
-          ),
+              (nextNoteOptions.size % 1 === 0 ? 0 : 0.25)
+          )
         )
 
         if (globalState.selectedTool === 8) {
           if (
             chartNotes.filter(
-              (n) => n.type === 'BPMChange' && n.beat === nearestBeat,
+              (n) => n.type === 'BPMChange' && n.beat === nearestBeat
             ).length === 0
           ) {
             saveHistory()
@@ -2594,7 +2715,7 @@ const draw = (timeStamp: number) => {
         } else if (globalState.selectedTool === 9) {
           if (
             chartNotes.filter(
-              (n) => n.type === 'TimeSignature' && n.beat === nearestBeat,
+              (n) => n.type === 'TimeSignature' && n.beat === nearestBeat
             ).length === 0
           ) {
             saveHistory()
@@ -2613,7 +2734,7 @@ const draw = (timeStamp: number) => {
         } else if (globalState.selectedTool === 10) {
           if (
             chartNotes.filter(
-              (n) => n.type === 'HiSpeed' && n.beat === nearestBeat,
+              (n) => n.type === 'HiSpeed' && n.beat === nearestBeat
             ).length === 0
           ) {
             saveHistory()
@@ -2627,6 +2748,7 @@ const draw = (timeStamp: number) => {
 
             chartNotes.push(newNote)
             _eventOffsetCache = computeEventOffsets()
+            disableCachedScaledTimes()
           }
         } else if (
           globalState.selectedTool === 2 ||
@@ -2686,8 +2808,8 @@ const draw = (timeStamp: number) => {
                 note.easingType === EasingType.EaseIn
                   ? Math.pow(percentY, 2)
                   : note.easingType === EasingType.EaseOut
-                    ? 1 - Math.pow(1 - percentY, 2)
-                    : percentY
+                  ? 1 - Math.pow(1 - percentY, 2)
+                  : percentY
 
               const lanePos = (1 - easedY) * note.lane + easedY * nN.lane
               const sizePos = (1 - easedY) * note.size + easedY * nN.size
@@ -2923,7 +3045,7 @@ const draw = (timeStamp: number) => {
   const maxBeat = getBeatFromMouse(-NOTE_HEIGHT)
 
   const notesToRender = chartNotes.filter(
-    (n) => n.beat >= minBeat && n.beat <= maxBeat,
+    (n) => n.beat >= minBeat && n.beat <= maxBeat
   )
 
   notesToRender
@@ -2995,11 +3117,11 @@ const draw = (timeStamp: number) => {
           -3 + nextNoteOptions.size / 2,
           Math.floor(
             (mouseX - width / 2) / laneWidth +
-              (nextNoteOptions.size % 1 === 0 ? 0.5 : 0),
+              (nextNoteOptions.size % 1 === 0 ? 0.5 : 0)
           ) /
             2 +
-            (nextNoteOptions.size % 1 === 0 ? 0 : 0.25),
-        ),
+            (nextNoteOptions.size % 1 === 0 ? 0 : 0.25)
+        )
       )
 
       if (isPasting) {
@@ -3011,10 +3133,10 @@ const draw = (timeStamp: number) => {
         // compute group's current horizontal center (in lane units) so we can
         // position the group such that the mouse sits at the group's center
         const groupLeft = Math.min(
-          ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2),
+          ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2)
         )
         const groupRight = Math.max(
-          ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
+          ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2)
         )
         let groupCenter = (groupLeft + groupRight) / 2
         groupCenter = Math.floor(groupCenter * 2) / 2

@@ -4,6 +4,8 @@ export interface Note {
   size: number
 
   type: string
+
+  scaledHitTime?: number
 }
 
 export enum FlickDirection {
