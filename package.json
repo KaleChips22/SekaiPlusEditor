@@ -5,7 +5,7 @@
   "author": "Kale",
   "icon": "./public/icon/icon_512.png",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.1.0-preview-01",
   "type": "module",
   "repository": {
     "type": "git",

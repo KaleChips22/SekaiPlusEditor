@@ -26,7 +26,7 @@ import {
 } from '../editor/note'
 import { getRect } from '../editor/noteImage'
 
-const playSpeed = 10.8
+const playSpeed = 12
 
 export let hasCachedScaledTimes = false
 export const disableCachedScaledTimes = () => (hasCachedScaledTimes = false)
@@ -49,7 +49,7 @@ let laneWidthAtBottom = 0,
   laneWidthAtTop = 0,
   laneWidthAtJudgement = 0
 
-const judgementHeightPercent = 0.32
+const judgementHeightPercent = 0.318
 const judgeAreaHeightPercent = 0.055
 
 /*
@@ -60,8 +60,11 @@ const judgeAreaHeightPercent = 0.055
 const stageImageSource = new Image()
 stageImageSource.src = 'stage/stage.png'
 
-const noteImageSource = document.createElement('img')
+const noteImageSource = new Image()
 noteImageSource.src = 'editor_sprites/notes.png'
+
+const particleImageSource = new Image()
+particleImageSource.src = 'particle/particles.png'
 
 export const updateBox = () => {
   if (width / height > boxRatio) {
@@ -327,7 +330,7 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
       // compute lane/size for trace position. If this is a HoldStart and the
       // hold is active, use interpolated lane so the trace/tick follows the head.
       let traceLane = n.lane
-      let traceSize = (n as any).size || 1
+      // let traceSize = (n as any).size || 1
       if (
         (note as any).type === 'HoldStart' &&
         scaledTime > (note as any).scaledHitTime &&
@@ -337,7 +340,7 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
         const hs = note as HoldStart
         const p = getHoldLaneSizeAt(hs, scaledTime)
         traceLane = p.lane
-        traceSize = p.size
+        // traceSize = p.size
       }
 
       let tx =
@@ -466,6 +469,54 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
   ctx.resetTransform()
 }
 
+const applyEasing = (p: number, type: EasingType) => {
+  if (type === EasingType.EaseIn) return Math.pow(p, 2)
+  if (type === EasingType.EaseOut) return 1 - Math.pow(1 - p, 2)
+  return p
+}
+
+// helper: compute interpolated lane/size/scaled time and map to X bounds
+// Uses temporary note + existing getXBounds helper so logic stays centralized.
+const computePoint = (
+  t: number,
+  from: HoldStart | HoldTick,
+  to: HoldStart | HoldTick,
+  scaledTime: number
+) => {
+  const scaledA = from.scaledHitTime!
+  const scaledB = to.scaledHitTime!
+  const segSpan = scaledB - scaledA || 1
+  const scaledAtT = scaledA + t * (scaledB - scaledA)
+  const rawPercent = (scaledAtT - scaledA) / segSpan
+  const eased = applyEasing(rawPercent, from.easingType)
+
+  // lerp lane and size with easing
+  const laneAt = from.lane + eased * (to.lane - from.lane)
+  const sizeAt = from.size + eased * (to.size - from.size)
+
+  // create a temporary note-like object for getXBounds
+  // ensure `nextNode` is defined so getXBounds doesn't try to access undefined
+  const tempNext: any = {
+    lane: to.lane,
+    size: to.size,
+    scaledHitTime: to.scaledHitTime,
+    type: to.type,
+  }
+
+  const tempNote: any = {
+    lane: laneAt,
+    size: sizeAt,
+    scaledHitTime: scaledAtT,
+    type: 'HoldTick',
+    nextNode: tempNext,
+  }
+
+  const [leftX, w] = getXBounds(tempNote as Note, scaledTime)
+  const y = scaledTimeToY(scaledAtT, scaledTime)
+
+  return { left: leftX, w, y }
+}
+
 const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
   if (ctx === null) return
 
@@ -492,52 +543,6 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
     const endY = scaledTimeToY(nextNote.scaledHitTime!, scaledTime)
 
     // helper: compute eased percent according to easing type
-    const applyEasing = (p: number, type: EasingType) => {
-      if (type === EasingType.EaseIn) return Math.pow(p, 2)
-      if (type === EasingType.EaseOut) return 1 - Math.pow(1 - p, 2)
-      return p
-    }
-
-    // helper: compute interpolated lane/size/scaled time and map to X bounds
-    // Uses temporary note + existing getXBounds helper so logic stays centralized.
-    const computePoint = (
-      t: number,
-      from: HoldStart | HoldTick,
-      to: HoldStart | HoldTick
-    ) => {
-      const scaledA = from.scaledHitTime!
-      const scaledB = to.scaledHitTime!
-      const segSpan = scaledB - scaledA || 1
-      const scaledAtT = scaledA + t * (scaledB - scaledA)
-      const rawPercent = (scaledAtT - scaledA) / segSpan
-      const eased = applyEasing(rawPercent, from.easingType)
-
-      // lerp lane and size with easing
-      const laneAt = from.lane + eased * (to.lane - from.lane)
-      const sizeAt = from.size + eased * (to.size - from.size)
-
-      // create a temporary note-like object for getXBounds
-      // ensure `nextNode` is defined so getXBounds doesn't try to access undefined
-      const tempNext: any = {
-        lane: to.lane,
-        size: to.size,
-        scaledHitTime: to.scaledHitTime,
-        type: to.type,
-      }
-
-      const tempNote: any = {
-        lane: laneAt,
-        size: sizeAt,
-        scaledHitTime: scaledAtT,
-        type: 'HoldTick',
-        nextNode: tempNext,
-      }
-
-      const [leftX, w] = getXBounds(tempNote as Note, scaledTime)
-      const y = scaledTimeToY(scaledAtT, scaledTime)
-
-      return { left: leftX, w, y }
-    }
 
     // Determine fill style (guide or color)
     if (n.isGuide) {
@@ -565,14 +570,14 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
     // subdivide the straight/curved segment into smaller quads to better approximate
     // the perspective deformation between start and end points
     const heightSpan = Math.max(1, Math.abs(endY - startY))
-    const subdivisions = Math.max(1, Math.ceil(heightSpan / 12))
+    const subdivisions = Math.max(1, Math.ceil(heightSpan / 8))
 
     for (let i = 0; i < subdivisions; i++) {
       const t0 = i / subdivisions
       const t1 = (i + 1) / subdivisions
 
-      const p0 = computePoint(t0, n, nextNote as any)
-      const p1 = computePoint(t1, n, nextNote as any)
+      const p0 = computePoint(t0, n, nextNote as any, scaledTime)
+      const p1 = computePoint(t1, n, nextNote as any, scaledTime)
 
       ctx.beginPath()
       ctx.moveTo(p0.left, p0.y)
@@ -674,7 +679,7 @@ const drawPreview = (timeStamp: number) => {
     })
     .filter((n) => {
       // cull holds that are completely outside the preview time window
-      const horizon = playSpeed / 12
+      const horizon = 10 / playSpeed
       const startTime = n.scaledHitTime || 0
 
       // find end time for this segment (next non-skip node)
@@ -700,7 +705,7 @@ const drawPreview = (timeStamp: number) => {
       // Always draw normal upcoming notes within the horizon
       const withinHorizon =
         scaledTime <= n.scaledHitTime! &&
-        n.scaledHitTime! - scaledTime <= playSpeed / 12
+        n.scaledHitTime! - scaledTime <= 10 / playSpeed
 
       // Special-case: keep HoldStart head drawn at judgement while the hold is active
       if (n.type === 'HoldStart') {
