@@ -26,15 +26,417 @@ import {
 } from '../editor/note'
 import { getRect } from '../editor/noteImage'
 
-const playSpeed = 12
+const playSpeed = 20
 
 export let hasCachedScaledTimes = false
 export const disableCachedScaledTimes = () => (hasCachedScaledTimes = false)
 
-export let ctx: CanvasRenderingContext2D | null = null
+export let gl: WebGLRenderingContext | null = null
 let lastTime: number
 
-export const setPreviewContext = (c: CanvasRenderingContext2D) => (ctx = c)
+// WebGL shader programs and buffers
+let shaderProgram: WebGLProgram | null = null
+let quadBuffer: WebGLBuffer | null = null
+let texCoordBuffer: WebGLBuffer | null = null
+const textureCache = new Map<HTMLImageElement, WebGLTexture>()
+
+// Text rendering using Canvas2D
+let textCanvas: HTMLCanvasElement | null = null
+let textCtx: CanvasRenderingContext2D | null = null
+let textTexture: WebGLTexture | null = null
+
+export const setPreviewContext = (canvas: HTMLCanvasElement) => {
+  gl = canvas.getContext('webgl', {
+    alpha: true,
+    premultipliedAlpha: true,
+    antialias: true,
+  })
+  if (!gl) {
+    console.error('WebGL not supported')
+    return
+  }
+
+  initWebGL()
+
+  // Create text rendering canvas
+  textCanvas = document.createElement('canvas')
+  textCanvas.width = 512
+  textCanvas.height = 512
+  textCtx = textCanvas.getContext('2d')
+}
+
+const initWebGL = () => {
+  if (!gl) return
+
+  // Vertex shader - handles arbitrary quad positioning with perspective
+  const vertexShaderSource = `
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+
+    uniform vec2 u_resolution;
+
+    varying vec2 v_texCoord;
+
+    void main() {
+      vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;
+      gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+      v_texCoord = a_texCoord;
+    }
+  `
+
+  // Fragment shader
+  const fragmentShaderSource = `
+    precision mediump float;
+
+    uniform sampler2D u_texture;
+    uniform float u_alpha;
+    uniform vec4 u_color;
+    uniform bool u_useTexture;
+
+    varying vec2 v_texCoord;
+
+    void main() {
+      if (u_useTexture) {
+        gl_FragColor = texture2D(u_texture, v_texCoord) * vec4(1, 1, 1, u_alpha);
+      } else {
+        gl_FragColor = u_color;
+      }
+    }
+  `
+
+  // Compile shaders
+  const vertexShader = gl.createShader(gl.VERTEX_SHADER)!
+  gl.shaderSource(vertexShader, vertexShaderSource)
+  gl.compileShader(vertexShader)
+
+  const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!
+  gl.shaderSource(fragmentShader, fragmentShaderSource)
+  gl.compileShader(fragmentShader)
+
+  // Create program
+  shaderProgram = gl.createProgram()!
+  gl.attachShader(shaderProgram, vertexShader)
+  gl.attachShader(shaderProgram, fragmentShader)
+  gl.linkProgram(shaderProgram)
+
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+    console.error(
+      'Shader program failed to link:',
+      gl.getProgramInfoLog(shaderProgram),
+    )
+    return
+  }
+
+  // Create buffers
+  quadBuffer = gl.createBuffer()
+  texCoordBuffer = gl.createBuffer()
+
+  // Enable blending for transparency
+  gl.enable(gl.BLEND)
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+}
+
+// Create or get cached WebGL texture from image
+const getTexture = (image: HTMLImageElement): WebGLTexture | null => {
+  if (!gl) return null
+
+  if (textureCache.has(image)) {
+    return textureCache.get(image)!
+  }
+
+  const texture = gl.createTexture()
+  if (!texture) return null
+
+  gl.bindTexture(gl.TEXTURE_2D, texture)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+  textureCache.set(image, texture)
+  return texture
+}
+
+// Draw an arbitrary quad with texture
+const drawQuad = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  x4: number,
+  y4: number,
+  image: HTMLImageElement,
+  srcX: number,
+  srcY: number,
+  srcW: number,
+  srcH: number,
+  alpha: number = 1.0,
+) => {
+  if (!gl || !shaderProgram) return
+
+  const texture = getTexture(image)
+  if (!texture) return
+
+  gl.useProgram(shaderProgram)
+
+  // Set up quad vertices (counter-clockwise)
+  const vertices = new Float32Array([
+    x1,
+    y1,
+    x2,
+    y2,
+    x4,
+    y4,
+    x2,
+    y2,
+    x3,
+    y3,
+    x4,
+    y4,
+  ])
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW)
+
+  const positionLocation = gl.getAttribLocation(shaderProgram, 'a_position')
+  gl.enableVertexAttribArray(positionLocation)
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+
+  // Set up texture coordinates
+  const imgW = image.width
+  const imgH = image.height
+  const u1 = srcX / imgW
+  const v1 = srcY / imgH
+  const u2 = (srcX + srcW) / imgW
+  const v2 = (srcY + srcH) / imgH
+
+  const texCoords = new Float32Array([
+    u1,
+    v1,
+    u2,
+    v1,
+    u1,
+    v2,
+    u2,
+    v1,
+    u2,
+    v2,
+    u1,
+    v2,
+  ])
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.DYNAMIC_DRAW)
+
+  const texCoordLocation = gl.getAttribLocation(shaderProgram, 'a_texCoord')
+  gl.enableVertexAttribArray(texCoordLocation)
+  gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0)
+
+  // Set uniforms
+  const resolutionLocation = gl.getUniformLocation(
+    shaderProgram,
+    'u_resolution',
+  )
+  gl.uniform2f(resolutionLocation, width, height)
+
+  const alphaLocation = gl.getUniformLocation(shaderProgram, 'u_alpha')
+  gl.uniform1f(alphaLocation, alpha)
+
+  const useTextureLocation = gl.getUniformLocation(
+    shaderProgram,
+    'u_useTexture',
+  )
+  gl.uniform1i(useTextureLocation, 1)
+
+  // Bind texture
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, texture)
+  gl.uniform1i(gl.getUniformLocation(shaderProgram, 'u_texture'), 0)
+
+  // Draw
+  gl.drawArrays(gl.TRIANGLES, 0, 6)
+}
+
+// Draw a filled quad (no texture)
+const drawFilledQuad = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  x4: number,
+  y4: number,
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+) => {
+  if (!gl || !shaderProgram) return
+
+  gl.useProgram(shaderProgram)
+
+  // Set up quad vertices
+  const vertices = new Float32Array([
+    x1,
+    y1,
+    x2,
+    y2,
+    x4,
+    y4,
+    x2,
+    y2,
+    x3,
+    y3,
+    x4,
+    y4,
+  ])
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW)
+
+  const positionLocation = gl.getAttribLocation(shaderProgram, 'a_position')
+  gl.enableVertexAttribArray(positionLocation)
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+
+  // Set uniforms
+  const resolutionLocation = gl.getUniformLocation(
+    shaderProgram,
+    'u_resolution',
+  )
+  gl.uniform2f(resolutionLocation, width, height)
+
+  const useTextureLocation = gl.getUniformLocation(
+    shaderProgram,
+    'u_useTexture',
+  )
+  gl.uniform1i(useTextureLocation, 0)
+
+  const colorLocation = gl.getUniformLocation(shaderProgram, 'u_color')
+  gl.uniform4f(colorLocation, r, g, b, a)
+
+  // Draw
+  gl.drawArrays(gl.TRIANGLES, 0, 6)
+}
+
+// Helper to draw a simple rectangle
+const drawRect = (
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+) => {
+  drawFilledQuad(x, y, x + w, y, x + w, y + h, x, y + h, r, g, b, a)
+}
+
+// Draw text using Canvas2D texture
+const drawText = (
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number = 20,
+  color: string = 'white',
+) => {
+  if (!gl || !textCtx || !textCanvas) return
+
+  // Clear text canvas
+  textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height)
+
+  // Draw text to canvas
+  textCtx.fillStyle = color
+  textCtx.font = `${fontSize}px Arial`
+  textCtx.textAlign = 'left'
+  textCtx.textBaseline = 'top'
+  textCtx.fillText(text, 0, 0)
+
+  // Measure text
+  const metrics = textCtx.measureText(text)
+  const textWidth = metrics.width
+  const textHeight = fontSize * 1.2 // Approximate height
+
+  // Create/update texture
+  if (!textTexture) {
+    textTexture = gl.createTexture()
+  }
+
+  gl.bindTexture(gl.TEXTURE_2D, textTexture)
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    textCanvas,
+  )
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+  // Draw text quad
+  if (!shaderProgram) return
+
+  gl.useProgram(shaderProgram)
+
+  const vertices = new Float32Array([
+    x,
+    y,
+    x + textWidth,
+    y,
+    x,
+    y + textHeight,
+    x + textWidth,
+    y,
+    x + textWidth,
+    y + textHeight,
+    x,
+    y + textHeight,
+  ])
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW)
+
+  const positionLocation = gl.getAttribLocation(shaderProgram, 'a_position')
+  gl.enableVertexAttribArray(positionLocation)
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+
+  const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1])
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.DYNAMIC_DRAW)
+
+  const texCoordLocation = gl.getAttribLocation(shaderProgram, 'a_texCoord')
+  gl.enableVertexAttribArray(texCoordLocation)
+  gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0)
+
+  const resolutionLocation = gl.getUniformLocation(
+    shaderProgram,
+    'u_resolution',
+  )
+  gl.uniform2f(resolutionLocation, width, height)
+
+  const alphaLocation = gl.getUniformLocation(shaderProgram, 'u_alpha')
+  gl.uniform1f(alphaLocation, 1.0)
+
+  const useTextureLocation = gl.getUniformLocation(
+    shaderProgram,
+    'u_useTexture',
+  )
+  gl.uniform1i(useTextureLocation, 1)
+
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, textTexture)
+  gl.uniform1i(gl.getUniformLocation(shaderProgram, 'u_texture'), 0)
+
+  gl.drawArrays(gl.TRIANGLES, 0, 6)
+}
 
 const boxRatio = 2048 / 1175
 const box = {
@@ -135,7 +537,7 @@ const getHoldLaneSizeAt = (start: HoldStart, currentScaledTime: number) => {
 
   const eased = applyEasing(
     Math.max(0, Math.min(1, rawPercent)),
-    from.easingType
+    from.easingType,
   )
 
   const lane = from.lane + eased * (to.lane - from.lane)
@@ -193,7 +595,7 @@ const getXBounds = (note: Note, currentTime: number): [number, number] => {
 }
 
 const drawPreviewNote = (note: Note, scaledTime: number) => {
-  if (ctx === null) return
+  if (gl === null) return
   if (
     note.type === 'HiSpeed' ||
     note.type === 'BPMChange' ||
@@ -222,8 +624,6 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
   if (percentAmong < 0) percentAmong = 0
   if (percentAmong > 1) percentAmong = 1
   percentAmong = Math.pow(15, percentAmong) / 15
-  ctx.strokeStyle = '#0ff'
-  ctx.lineWidth = 3
   // determine lane and size to draw. For active HoldStart heads, interpolate
   // along the hold chain so the head follows the current hold lane/size.
   let drawLane = note.lane
@@ -250,52 +650,83 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
     (1 - judgementHeightPercent - judgeAreaHeightPercent) * box.height + box.y
   const w = laneWidthAtJudgement * drawSize * 4
   const h = judgeAreaHeightPercent * box.height * 2
-  ctx.translate(box.x + box.width / 2, box.vanishingY)
-  ctx.scale(percentAmong, percentAmong)
-  ctx.translate(-(box.x + box.width / 2), -box.vanishingY)
 
-  // ctx.strokeRect(
-  //   x,
-  //   y,
-  //   laneWidthAtJudgement * note.size * 4,
-  //   judgeAreaHeightPercent * box.height
-  // )
+  // Calculate 3D perspective transformation
+  const centerX = box.x + box.width / 2
+  const vanishY = box.vanishingY
+
+  // Transform coordinates to apply perspective scaling
+  const transformX = (px: number) => {
+    return centerX + (px - centerX) * percentAmong
+  }
+
+  const transformY = (py: number) => {
+    return vanishY + (py - vanishY) * percentAmong
+  }
+
+  // Calculate the four corners of the note with 3D perspective
+  // The note gets smaller as it goes toward the vanishing point
+  const scaleAtY = percentAmong
+
+  const x1 = transformX(x)
+  const y1 = transformY(y)
+  const x2 = transformX(x + w)
+  const y2 = transformY(y)
+  const x3 = transformX(x + w)
+  const y3 = transformY(y + h)
+  const x4 = transformX(x)
+  const y4 = transformY(y + h)
 
   if (note.type !== 'HoldTick') {
-    ctx.drawImage(
+    // Draw center part
+    drawQuad(
+      x1 + 0.7 * h * scaleAtY,
+      y1,
+      x2 - 0.7 * h * scaleAtY,
+      y2,
+      x3 - 0.7 * h * scaleAtY,
+      y3,
+      x4 + 0.7 * h * scaleAtY,
+      y4,
       noteImageSource,
       noteImageRect.x + 0.5 * noteImageRect.h,
       noteImageRect.y,
       noteImageRect.w - noteImageRect.h,
       noteImageRect.h,
-      x + 0.7 * h,
-      y,
-      w - h * 1.4,
-      h
     )
 
-    ctx.drawImage(
+    // Draw left cap
+    drawQuad(
+      x1 - 0.3 * h * scaleAtY,
+      y1,
+      x1 + 0.7 * h * scaleAtY,
+      y2,
+      x4 + 0.7 * h * scaleAtY,
+      y3,
+      x4 - 0.3 * h * scaleAtY,
+      y4,
       noteImageSource,
       noteImageRect.x,
       noteImageRect.y,
       noteImageRect.h,
       noteImageRect.h,
-      x - 0.3 * h,
-      y,
-      h,
-      h
     )
 
-    ctx.drawImage(
+    // Draw right cap
+    drawQuad(
+      x2 - 0.7 * h * scaleAtY,
+      y1,
+      x2 + 0.3 * h * scaleAtY,
+      y2,
+      x3 + 0.3 * h * scaleAtY,
+      y3,
+      x3 - 0.7 * h * scaleAtY,
+      y4,
       noteImageSource,
       noteImageRect.x + noteImageRect.w - noteImageRect.h,
       noteImageRect.y,
       noteImageRect.h,
       noteImageRect.h,
-      x + 0.3 * h + w - h,
-      y,
-      h,
-      h
     )
   }
 
@@ -357,8 +788,8 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
 
         if (root && root.type === 'HoldStart' && root.isTrace) {
           // find previous and next non-skip nodes around this tick
-          let pN: any = t.prevNode
-          let nN: any = t.nextNode
+          let pN: HoldTick | HoldStart = t.prevNode
+          let nN: HoldTick | HoldEnd = t.nextNode
 
           while (pN && 'prevNode' in pN && pN.tickType === TickType.Skip)
             pN = pN.prevNode
@@ -372,8 +803,8 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
               pN.easingType === EasingType.EaseIn
                 ? Math.pow(percentY, 2)
                 : pN.easingType === EasingType.EaseOut
-                ? 1 - Math.pow(1 - percentY, 2)
-                : percentY
+                  ? 1 - Math.pow(1 - percentY, 2)
+                  : percentY
             tx =
               box.x +
               box.width / 2 +
@@ -383,8 +814,8 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
           }
         } else if (t.tickType === TickType.Skip) {
           // fallback: original skip handling
-          let pN = t.prevNode
-          let nN = t.nextNode
+          let pN: HoldTick | HoldStart = t.prevNode
+          let nN: HoldTick | HoldEnd = t.nextNode
 
           while ('prevNode' in pN && pN.tickType === TickType.Skip)
             pN = pN.prevNode
@@ -397,8 +828,8 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
             pN.easingType === EasingType.EaseIn
               ? Math.pow(percentY, 2)
               : pN.easingType === EasingType.EaseOut
-              ? 1 - Math.pow(1 - percentY, 2)
-              : percentY
+                ? 1 - Math.pow(1 - percentY, 2)
+                : percentY
           tx =
             box.x +
             box.width / 2 +
@@ -408,16 +839,30 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
         }
       }
 
-      ctx.drawImage(
+      // Draw trace with perspective
+      const tx1 = transformX(tx)
+      const ty1 = transformY(y - 0.125 * tw)
+      const tx2 = transformX(tx + tw)
+      const ty2 = transformY(y - 0.125 * tw)
+      const tx3 = transformX(tx + tw)
+      const ty3 = transformY(y - 0.125 * tw + tw)
+      const tx4 = transformX(tx)
+      const ty4 = transformY(y - 0.125 * tw + tw)
+
+      drawQuad(
+        tx1,
+        ty1,
+        tx2,
+        ty2,
+        tx3,
+        ty3,
+        tx4,
+        ty4,
         noteImageSource,
         traceRect.x,
         traceRect.y,
         traceRect.w,
         traceRect.h,
-        tx,
-        y - 0.125 * tw,
-        tw,
-        tw
       )
     }
   }
@@ -437,36 +882,59 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
 
         const flickRect = getRect(flickSpriteName)!
 
-        let fw = (0.75 * flickRect.w * box.height) / 1175
+        const fw = (0.75 * flickRect.w * box.height) / 1175
         const fh = (0.75 * flickRect.h * box.height) / 1175
-        let fx =
+        const fx =
           box.x + (box.width - fw) / 2 + note.lane * 4 * laneWidthAtJudgement
         const fy = y - fh
 
+        // Draw flick arrow with perspective
+        const fx1 = transformX(fx)
+        const fy1 = transformY(fy)
+        const fx2 = transformX(fx + fw)
+        const fy2 = transformY(fy)
+        const fx3 = transformX(fx + fw)
+        const fy3 = transformY(fy + fh)
+        const fx4 = transformX(fx)
+        const fy4 = transformY(fy + fh)
+
         if (n.flickDir === FlickDirection.Right) {
-          ctx.scale(-1, 1)
-          fw *= -1
-          fx *= -1
+          // Flip horizontally for right flick
+          drawQuad(
+            fx2,
+            fy2,
+            fx1,
+            fy1,
+            fx4,
+            fy4,
+            fx3,
+            fy3,
+            noteImageSource,
+            flickRect.x,
+            flickRect.y,
+            flickRect.w,
+            flickRect.h,
+          )
+        } else {
+          drawQuad(
+            fx1,
+            fy1,
+            fx2,
+            fy2,
+            fx3,
+            fy3,
+            fx4,
+            fy4,
+            noteImageSource,
+            flickRect.x,
+            flickRect.y,
+            flickRect.w,
+            flickRect.h,
+          )
         }
-
-        ctx.drawImage(
-          noteImageSource,
-          flickRect.x,
-          flickRect.y,
-          flickRect.w,
-          flickRect.h,
-          fx,
-          fy,
-          fw,
-          fh
-        )
-
-        if (n.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
       }
     }
   }
-
-  ctx.resetTransform()
 }
 
 const applyEasing = (p: number, type: EasingType) => {
@@ -480,8 +948,8 @@ const applyEasing = (p: number, type: EasingType) => {
 const computePoint = (
   t: number,
   from: HoldStart | HoldTick,
-  to: HoldStart | HoldTick,
-  scaledTime: number
+  to: HoldTick | HoldEnd,
+  scaledTime: number,
 ) => {
   const scaledA = from.scaledHitTime!
   const scaledB = to.scaledHitTime!
@@ -496,20 +964,20 @@ const computePoint = (
 
   // create a temporary note-like object for getXBounds
   // ensure `nextNode` is defined so getXBounds doesn't try to access undefined
-  const tempNext: any = {
+  const tempNext = {
     lane: to.lane,
     size: to.size,
     scaledHitTime: to.scaledHitTime,
     type: to.type,
-  }
+  } as HoldTick
 
-  const tempNote: any = {
+  const tempNote = {
     lane: laneAt,
     size: sizeAt,
     scaledHitTime: scaledAtT,
-    type: 'HoldTick',
+    type: 'HoldTick' as const,
     nextNode: tempNext,
-  }
+  } as HoldTick
 
   const [leftX, w] = getXBounds(tempNote as Note, scaledTime)
   const y = scaledTimeToY(scaledAtT, scaledTime)
@@ -518,7 +986,7 @@ const computePoint = (
 }
 
 const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
-  if (ctx === null) return
+  if (gl === null) return
 
   if (
     note.type === 'HoldStart' ||
@@ -544,7 +1012,11 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
 
     // helper: compute eased percent according to easing type
 
-    // Determine fill style (guide or color)
+    // Determine color based on hold type
+    let r = 0.5,
+      g = 1.0,
+      b = 0.83,
+      a = 0.67
     if (n.isGuide) {
       let pN = note as HoldStart | HoldTick | HoldEnd
       while (pN.type !== 'HoldStart') pN = pN.prevNode
@@ -552,19 +1024,27 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       while (nN.type !== 'HoldEnd') nN = nN.nextNode
       const gY0 = scaledTimeToY(pN.scaledHitTime!, scaledTime)
       const gY1 = scaledTimeToY(nN.scaledHitTime!, scaledTime)
-      const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
-      guideGradient.addColorStop(
+
+      // Parse guide color (hex to RGB)
+      const color = n.isGold ? goldGuideColor : guideColor
+      const hex = color.replace('#', '')
+      r = parseInt(hex.substr(0, 2), 16) / 255
+      g = parseInt(hex.substr(2, 2), 16) / 255
+      b = parseInt(hex.substr(4, 2), 16) / 255
+
+      // Gradient effect: fade alpha based on Y position
+      const gradientPercent = Math.max(
         0,
-        (n.isGold ? goldGuideColor : guideColor) + 'bb'
+        Math.min(1, (startY - gY0) / (gY1 - gY0)),
       )
-      guideGradient.addColorStop(
-        1,
-        (n.isGold ? goldGuideColor : guideColor) + '33'
-      )
-      ctx.fillStyle = guideGradient
+      a = 0.73 - gradientPercent * 0.53
     } else {
-      if (n.isGold) ctx.fillStyle = '#fbffdcaa'
-      else ctx.fillStyle = '#7fffd3aa'
+      if (n.isGold) {
+        r = 0.98
+        g = 1.0
+        b = 0.86
+        a = 0.67
+      }
     }
 
     // subdivide the straight/curved segment into smaller quads to better approximate
@@ -576,22 +1056,30 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       const t0 = i / subdivisions
       const t1 = (i + 1) / subdivisions
 
-      const p0 = computePoint(t0, n, nextNote as any, scaledTime)
-      const p1 = computePoint(t1, n, nextNote as any, scaledTime)
+      const p0 = computePoint(t0, n, nextNote as HoldTick | HoldEnd, scaledTime)
+      const p1 = computePoint(t1, n, nextNote as HoldTick | HoldEnd, scaledTime)
 
-      ctx.beginPath()
-      ctx.moveTo(p0.left, p0.y)
-      ctx.lineTo(p0.left + p0.w, p0.y)
-      ctx.lineTo(p1.left + p1.w, p1.y)
-      ctx.lineTo(p1.left, p1.y)
-      ctx.closePath()
-      ctx.fill()
+      // Draw trapezoid segment with 3D perspective
+      drawFilledQuad(
+        p0.left,
+        p0.y,
+        p0.left + p0.w,
+        p0.y,
+        p1.left + p1.w,
+        p1.y,
+        p1.left,
+        p1.y,
+        r,
+        g,
+        b,
+        a,
+      )
     }
   }
 }
 
 const drawPreview = (timeStamp: number) => {
-  if (ctx === null) return
+  if (gl === null) return
   if (lastTime == undefined) lastTime = timeStamp
   const deltaTime = timeStamp - lastTime
 
@@ -610,41 +1098,42 @@ const drawPreview = (timeStamp: number) => {
   const tSig = getTsig(cursorPos)
   const hiSpeed = getHiSpeed(cursorPos)
 
-  ctx.clearRect(0, 0, width, height)
+  gl.clearColor(0, 0, 0, 1)
+  gl.clear(gl.COLOR_BUFFER_BIT)
 
-  ctx.fillStyle = '#0007'
-  ctx.fillRect(0, 0, width, height)
+  // Draw dark overlay
+  drawRect(0, 0, width, height, 0, 0, 0, 0.43)
 
-  ctx.fillStyle = '#222b'
-  ctx.beginPath()
-  ctx.roundRect(20, 20, 200, 350, 10)
-  ctx.fill()
+  // Draw info panel background
+  drawRect(20, 20, 200, 350, 0.13, 0.13, 0.13, 0.73)
 
-  ctx.fillStyle = 'white'
-  ctx.font = '20px Arial'
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-  ctx.fillText('Beat: ' + cursorPos.toString().slice(0, 5), 40, 40)
-  ctx.fillText('BPM: ' + bpm, 40, 70)
-  ctx.fillText('Time: ' + time.toString().slice(0, 5), 40, 100)
-  ctx.fillText('Scaled Time: ' + scaledTime.toString().slice(0, 5), 40, 130)
-  ctx.fillText('TSig: ' + tSig.top + '/' + tSig.bottom, 40, 160)
-  ctx.fillText('Speed: ' + hiSpeed.toString().slice(0, 5) + 'x', 40, 190)
+  // Draw text info
+  drawText('Beat: ' + cursorPos.toString().slice(0, 5), 40, 40)
+  drawText('BPM: ' + bpm, 40, 70)
+  drawText('Time: ' + time.toString().slice(0, 5), 40, 100)
+  drawText('Scaled Time: ' + scaledTime.toString().slice(0, 5), 40, 130)
+  drawText('TSig: ' + tSig.top + '/' + tSig.bottom, 40, 160)
+  drawText('Speed: ' + hiSpeed.toString().slice(0, 5) + 'x', 40, 190)
 
   if (isPlaying) {
     setCursorPos(cursorPos + (getBPM(cursorPos) * deltaTime) / 60000)
   }
 
-  ctx.drawImage(
+  // Draw stage background
+  drawQuad(
+    box.x,
+    box.y,
+    box.x + box.width,
+    box.y,
+    box.x + box.width,
+    box.y + box.height,
+    box.x,
+    box.y + box.height,
     stageImageSource,
     0,
     1,
     2048,
     1176,
-    box.x,
-    box.y,
-    box.width,
-    box.height
   )
 
   // Debug lanes
@@ -683,10 +1172,14 @@ const drawPreview = (timeStamp: number) => {
       const startTime = n.scaledHitTime || 0
 
       // find end time for this segment (next non-skip node)
-      let endNode: any = n
+      let endNode: Note = n
       while ('nextNode' in endNode && endNode.nextNode) {
-        endNode = endNode.nextNode
-        if (endNode.tickType !== TickType.Skip) break
+        endNode = endNode.nextNode as Note
+        if (
+          'tickType' in endNode &&
+          (endNode as HoldTick).tickType !== TickType.Skip
+        )
+          break
       }
       const endTime = endNode.scaledHitTime || startTime
 
@@ -710,16 +1203,16 @@ const drawPreview = (timeStamp: number) => {
       // Special-case: keep HoldStart head drawn at judgement while the hold is active
       if (n.type === 'HoldStart') {
         // find the final HoldEnd node for this hold chain (skip intermediate skip ticks)
-        let endNode: any = n
+        let endNode: Note = n
         while ('nextNode' in endNode && endNode.nextNode) {
-          endNode = endNode.nextNode
+          endNode = endNode.nextNode as Note
           if (endNode.type === 'HoldEnd') break
         }
-        const endTime = endNode.scaledHitTime || n.scaledHitTime
+        const endTime = endNode.scaledHitTime || n.scaledHitTime!
 
         // if the hold has started but not yet ended, keep its head visible
         const holdActive =
-          scaledTime > n.scaledHitTime! && scaledTime <= endTime
+          scaledTime > n.scaledHitTime! && scaledTime <= endTime!
 
         return withinHorizon || holdActive
       }

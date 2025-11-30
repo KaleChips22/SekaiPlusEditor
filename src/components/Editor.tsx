@@ -16,7 +16,7 @@ import { twMerge } from 'tailwind-merge'
 import { ChartArea, Eye } from 'lucide-react'
 import drawPreview, {
   setPreviewContext,
-  ctx as previewCtx,
+  gl as previewGl,
 } from '../preview/draw'
 
 const MIN_SIDEBAR_WIDTH = 215
@@ -31,7 +31,9 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
   const raf = useRef(0)
   const isPreviewingRef = useRef(isPreviewing)
 
-  const currentCtxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const currentCtxRef = useRef<
+    CanvasRenderingContext2D | WebGLRenderingContext | null
+  >(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -64,7 +66,7 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
   }, [onMouseMove])
 
   useEffect(() => {
-    currentCtxRef.current = isPreviewing ? previewCtx : ctx
+    currentCtxRef.current = isPreviewing ? previewGl : ctx
   }, [isPreviewing])
 
   const runDrawLoop = useCallback(
@@ -73,8 +75,11 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
       if (!canvas) return
 
       if (currentCtxRef.current === null) {
-        const setContext = isPreviewing ? setPreviewContext : setCtx
-        setContext(canvas.getContext('2d')!)
+        if (isPreviewing) {
+          setPreviewContext(canvas)
+        } else {
+          setCtx(canvas.getContext('2d')!)
+        }
       }
 
       // Only schedule the next frame when not previewing. Use a ref so
