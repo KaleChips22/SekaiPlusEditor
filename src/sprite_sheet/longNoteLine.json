@@ -1,0 +1,6 @@
+{
+  "long_active": [32, 1, 242, 2],
+  "long_normal": [32, 5, 242, 2],
+  "long_critical_active": [32, 9, 242, 2],
+  "long_critical_normal": [32, 13, 242, 2]
+}
