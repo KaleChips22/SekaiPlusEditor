@@ -359,7 +359,8 @@ const drawText = (
   // Measure text
   const metrics = textCtx.measureText(text)
   const textWidth = metrics.width
-  const textHeight = fontSize * 1.2 // Approximate height
+  const textHeight =
+    metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
 
   // Create/update texture
   if (!textTexture) {
@@ -655,38 +656,38 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
   const centerX = box.x + box.width / 2
   const vanishY = box.vanishingY
 
-  // Transform coordinates to apply perspective scaling
-  const transformX = (px: number) => {
-    return centerX + (px - centerX) * percentAmong
-  }
+  const yCenter = scaledTimeToY(note.scaledHitTime, scaledTime)
+  const scaleAtCenter = Math.max(0, (yCenter - vanishY) / (y - vanishY))
+  const scaledHeight = h * scaleAtCenter
+  const yTop = yCenter - scaledHeight / 2
+  const yBottom = yCenter + scaledHeight / 2
 
-  const transformY = (py: number) => {
-    return vanishY + (py - vanishY) * percentAmong
-  }
+  const yTop2 = yCenter + 1.5 * (yTop - yCenter)
 
-  // Calculate the four corners of the note with 3D perspective
-  // The note gets smaller as it goes toward the vanishing point
-  const scaleAtY = percentAmong
+  const scaleTop = Math.max(0, (yTop2 - vanishY) / (y - vanishY))
+  const scaleBottom = Math.max(0, (yCenter - vanishY) / (y - vanishY))
 
-  const x1 = transformX(x)
-  const y1 = transformY(y)
-  const x2 = transformX(x + w)
-  const y2 = transformY(y)
-  const x3 = transformX(x + w)
-  const y3 = transformY(y + h)
-  const x4 = transformX(x)
-  const y4 = transformY(y + h)
+  // Calculate trapezoid corners with uniform scaling from judgment line reference
+  // Each edge scales based on its distance from vanishing point
+  const x1 = centerX + (x - centerX) * scaleTop
+  const y1 = yTop
+  const x2 = centerX + (x + w - centerX) * scaleTop
+  const y2 = yTop
+  const x3 = centerX + (x + w - centerX) * scaleBottom
+  const y3 = yBottom
+  const x4 = centerX + (x - centerX) * scaleBottom
+  const y4 = yBottom
 
   if (note.type !== 'HoldTick') {
-    // Draw center part
+    // Draw center part with perspective scaling at top and bottom
     drawQuad(
-      x1 + 0.7 * h * scaleAtY,
+      x1 + 0.7 * h * scaleTop,
       y1,
-      x2 - 0.7 * h * scaleAtY,
+      x2 - 0.7 * h * scaleTop,
       y2,
-      x3 - 0.7 * h * scaleAtY,
+      x3 - 0.7 * h * scaleBottom,
       y3,
-      x4 + 0.7 * h * scaleAtY,
+      x4 + 0.7 * h * scaleBottom,
       y4,
       noteImageSource,
       noteImageRect.x + 0.5 * noteImageRect.h,
@@ -695,15 +696,15 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
       noteImageRect.h,
     )
 
-    // Draw left cap
+    // Draw left cap with perspective scaling
     drawQuad(
-      x1 - 0.3 * h * scaleAtY,
+      x1 - 0.3 * h * scaleTop,
       y1,
-      x1 + 0.7 * h * scaleAtY,
+      x1 + 0.7 * h * scaleTop,
       y2,
-      x4 + 0.7 * h * scaleAtY,
+      x4 + 0.7 * h * scaleBottom,
       y3,
-      x4 - 0.3 * h * scaleAtY,
+      x4 - 0.3 * h * scaleBottom,
       y4,
       noteImageSource,
       noteImageRect.x,
@@ -712,15 +713,15 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
       noteImageRect.h,
     )
 
-    // Draw right cap
+    // Draw right cap with perspective scaling
     drawQuad(
-      x2 - 0.7 * h * scaleAtY,
+      x2 - 0.7 * h * scaleTop,
       y1,
-      x2 + 0.3 * h * scaleAtY,
+      x2 + 0.3 * h * scaleTop,
       y2,
-      x3 + 0.3 * h * scaleAtY,
+      x3 + 0.3 * h * scaleBottom,
       y3,
-      x3 - 0.7 * h * scaleAtY,
+      x3 - 0.7 * h * scaleBottom,
       y4,
       noteImageSource,
       noteImageRect.x + noteImageRect.w - noteImageRect.h,
@@ -839,7 +840,15 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
         }
       }
 
-      // Draw trace with perspective
+      // Draw trace with old perspective system
+      const transformX = (px: number) => {
+        return centerX + (px - centerX) * percentAmong
+      }
+
+      const transformY = (py: number) => {
+        return vanishY + (py - vanishY) * percentAmong
+      }
+
       const tx1 = transformX(tx)
       const ty1 = transformY(y - 0.125 * tw)
       const tx2 = transformX(tx + tw)
@@ -888,7 +897,15 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
           box.x + (box.width - fw) / 2 + note.lane * 4 * laneWidthAtJudgement
         const fy = y - fh
 
-        // Draw flick arrow with perspective
+        // Draw flick arrow with old perspective system
+        const transformX = (px: number) => {
+          return centerX + (px - centerX) * percentAmong
+        }
+
+        const transformY = (py: number) => {
+          return vanishY + (py - vanishY) * percentAmong
+        }
+
         const fx1 = transformX(fx)
         const fy1 = transformY(fy)
         const fx2 = transformX(fx + fw)
@@ -1033,11 +1050,11 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       b = parseInt(hex.substr(4, 2), 16) / 255
 
       // Gradient effect: fade alpha based on Y position
-      const gradientPercent = Math.max(
-        0,
-        Math.min(1, (startY - gY0) / (gY1 - gY0)),
-      )
-      a = 0.73 - gradientPercent * 0.53
+      // const gradientPercent = Math.max(
+      //   0,
+      //   Math.min(1, (startY - gY0) / (gY1 - gY0)),
+      // )
+      a = 0.73 //- gradientPercent * 0.53
     } else {
       if (n.isGold) {
         r = 0.98
@@ -1092,28 +1109,25 @@ const drawPreview = (timeStamp: number) => {
     hasCachedScaledTimes = true
   }
 
-  const bpm = getBPM(cursorPos)
-  const time = getTime(cursorPos)
+  // const bpm = getBPM(cursorPos)
+  // const time = getTime(cursorPos)
   const scaledTime = getScaledTime(cursorPos)
-  const tSig = getTsig(cursorPos)
-  const hiSpeed = getHiSpeed(cursorPos)
+  // const tSig = getTsig(cursorPos)
+  // const hiSpeed = getHiSpeed(cursorPos)
 
-  gl.clearColor(0, 0, 0, 1)
+  gl.clearColor(0, 0, 0, 0.6)
   gl.clear(gl.COLOR_BUFFER_BIT)
 
-  // Draw dark overlay
-  drawRect(0, 0, width, height, 0, 0, 0, 0.43)
+  // // Draw info panel background
+  // drawRect(20, 20, 200, 350, 0.13, 0.13, 0.13, 0.73)
 
-  // Draw info panel background
-  drawRect(20, 20, 200, 350, 0.13, 0.13, 0.13, 0.73)
-
-  // Draw text info
-  drawText('Beat: ' + cursorPos.toString().slice(0, 5), 40, 40)
-  drawText('BPM: ' + bpm, 40, 70)
-  drawText('Time: ' + time.toString().slice(0, 5), 40, 100)
-  drawText('Scaled Time: ' + scaledTime.toString().slice(0, 5), 40, 130)
-  drawText('TSig: ' + tSig.top + '/' + tSig.bottom, 40, 160)
-  drawText('Speed: ' + hiSpeed.toString().slice(0, 5) + 'x', 40, 190)
+  // // Draw text info
+  // drawText('Beat: ' + cursorPos.toString().slice(0, 5), 40, 40, 80)
+  // drawText('BPM: ' + bpm, 40, 70, 80)
+  // drawText('Time: ' + time.toString().slice(0, 5), 40, 100, 80)
+  // drawText('Scaled Time: ' + scaledTime.toString().slice(0, 5), 40, 130, 80)
+  // drawText('TSig: ' + tSig.top + '/' + tSig.bottom, 40, 160, 80)
+  // drawText('Speed: ' + hiSpeed.toString().slice(0, 5) + 'x', 40, 190, 80)
 
   if (isPlaying) {
     setCursorPos(cursorPos + (getBPM(cursorPos) * deltaTime) / 60000)
