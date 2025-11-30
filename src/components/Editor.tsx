@@ -118,8 +118,8 @@ const Editor = ({ globalState }: { globalState: globalState }) => {
       previewCanvas.width = rect.width * dpr
       previewCanvas.height = rect.height * dpr
 
-      setWidth(editorCanvas.width)
-      setHeight(editorCanvas.height)
+      setWidth(rect.width * dpr)
+      setHeight(rect.height * dpr)
     }
 
     resetSize()

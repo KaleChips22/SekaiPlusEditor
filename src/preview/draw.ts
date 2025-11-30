@@ -25,6 +25,7 @@ import {
   type Note,
 } from '../editor/note'
 import { getRect } from '../editor/noteImage'
+import * as holdNoteRect from '../sprite_sheet/longNoteLine.json'
 
 const playSpeed = 20
 
@@ -498,6 +499,9 @@ noteImageSource.src = 'editor_sprites/notes.png'
 
 const particleImageSource = new Image()
 particleImageSource.src = 'particle/particles.png'
+
+const holdNoteImageSource = new Image()
+holdNoteImageSource.src = 'editor_sprites/longNoteLine.png'
 
 export const updateBox = () => {
   if (width / height > boxRatio) {
@@ -1141,24 +1145,45 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       }
 
       // Draw trapezoid segment with 3D perspective and gradient alpha
-      drawFilledQuad(
-        p0.left,
-        p0.y,
-        p0.left + p0.w,
-        p0.y,
-        p1.left + p1.w,
-        p1.y,
-        p1.left,
-        p1.y,
-        r,
-        g,
-        b,
-        a,
-        alpha0,
-        alpha0,
-        alpha1,
-        alpha1,
-      )
+      if (n.isGuide) {
+        drawFilledQuad(
+          p0.left,
+          p0.y,
+          p0.left + p0.w,
+          p0.y,
+          p1.left + p1.w,
+          p1.y,
+          p1.left,
+          p1.y,
+          r,
+          g,
+          b,
+          a,
+          alpha0,
+          alpha0,
+          alpha1,
+          alpha1,
+        )
+      } else {
+        const rect = n.isGold
+          ? holdNoteRect.long_critical_normal
+          : holdNoteRect.long_normal
+        drawQuad(
+          p0.left,
+          p0.y,
+          p0.left + p0.w,
+          p0.y,
+          p1.left + p1.w,
+          p1.y,
+          p1.left,
+          p1.y,
+          holdNoteImageSource,
+          rect[0],
+          rect[1],
+          rect[2],
+          rect[3],
+        )
+      }
     }
   }
 }
