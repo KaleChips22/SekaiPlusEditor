@@ -38,6 +38,7 @@ let lastTime: number
 let shaderProgram: WebGLProgram | null = null
 let quadBuffer: WebGLBuffer | null = null
 let texCoordBuffer: WebGLBuffer | null = null
+let alphaBuffer: WebGLBuffer | null = null
 const textureCache = new Map<HTMLImageElement, WebGLTexture>()
 
 // Text rendering using Canvas2D
@@ -72,15 +73,18 @@ const initWebGL = () => {
   const vertexShaderSource = `
     attribute vec2 a_position;
     attribute vec2 a_texCoord;
+    attribute float a_alpha;
 
     uniform vec2 u_resolution;
 
     varying vec2 v_texCoord;
+    varying float v_alpha;
 
     void main() {
       vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;
       gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
       v_texCoord = a_texCoord;
+      v_alpha = a_alpha;
     }
   `
 
@@ -92,14 +96,17 @@ const initWebGL = () => {
     uniform float u_alpha;
     uniform vec4 u_color;
     uniform bool u_useTexture;
+    uniform bool u_useVertexAlpha;
 
     varying vec2 v_texCoord;
+    varying float v_alpha;
 
     void main() {
       if (u_useTexture) {
         gl_FragColor = texture2D(u_texture, v_texCoord) * vec4(1, 1, 1, u_alpha);
       } else {
-        gl_FragColor = u_color;
+        float finalAlpha = u_useVertexAlpha ? v_alpha : u_color.a;
+        gl_FragColor = vec4(u_color.rgb, finalAlpha);
       }
     }
   `
@@ -130,6 +137,7 @@ const initWebGL = () => {
   // Create buffers
   quadBuffer = gl.createBuffer()
   texCoordBuffer = gl.createBuffer()
+  alphaBuffer = gl.createBuffer()
 
   // Enable blending for transparency
   gl.enable(gl.BLEND)
@@ -274,6 +282,10 @@ const drawFilledQuad = (
   g: number,
   b: number,
   a: number,
+  a1?: number,
+  a2?: number,
+  a3?: number,
+  a4?: number,
 ) => {
   if (!gl || !shaderProgram) return
 
@@ -317,6 +329,24 @@ const drawFilledQuad = (
 
   const colorLocation = gl.getUniformLocation(shaderProgram, 'u_color')
   gl.uniform4f(colorLocation, r, g, b, a)
+
+  // Handle per-vertex alpha if provided
+  const useVertexAlpha =
+    a1 !== undefined && a2 !== undefined && a3 !== undefined && a4 !== undefined
+  const useVertexAlphaLocation = gl.getUniformLocation(
+    shaderProgram,
+    'u_useVertexAlpha',
+  )
+  gl.uniform1i(useVertexAlphaLocation, useVertexAlpha ? 1 : 0)
+
+  if (useVertexAlpha) {
+    const alphas = new Float32Array([a1!, a2!, a4!, a2!, a3!, a4!])
+    gl.bindBuffer(gl.ARRAY_BUFFER, alphaBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, alphas, gl.DYNAMIC_DRAW)
+    const alphaLocation = gl.getAttribLocation(shaderProgram, 'a_alpha')
+    gl.enableVertexAttribArray(alphaLocation)
+    gl.vertexAttribPointer(alphaLocation, 1, gl.FLOAT, false, 0, 0)
+  }
 
   // Draw
   gl.drawArrays(gl.TRIANGLES, 0, 6)
@@ -1034,13 +1064,35 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       g = 1.0,
       b = 0.83,
       a = 0.67
+    let currentNodeIndex = 0
+    let nextNodeIndex = 0
+    let totalHoldTicks = 0
     if (n.isGuide) {
       let pN = note as HoldStart | HoldTick | HoldEnd
       while (pN.type !== 'HoldStart') pN = pN.prevNode
       let nN = note as HoldEnd | HoldTick | HoldEnd
       while (nN.type !== 'HoldEnd') nN = nN.nextNode
-      const gY0 = scaledTimeToY(pN.scaledHitTime!, scaledTime)
-      const gY1 = scaledTimeToY(nN.scaledHitTime!, scaledTime)
+
+      // Count total hold ticks and find current node's index
+      let tempNode = pN as HoldStart | HoldTick | HoldEnd
+      let nodeIndex = 0
+      while (tempNode.type !== 'HoldEnd') {
+        if (tempNode === note) {
+          currentNodeIndex = nodeIndex
+        }
+        if (tempNode === nextNote) {
+          nextNodeIndex = nodeIndex
+        }
+        if (tempNode.type === 'HoldTick') {
+          totalHoldTicks++
+        }
+        tempNode = tempNode.nextNode as HoldStart | HoldTick | HoldEnd
+        nodeIndex++
+      }
+      // Check if nextNote is the HoldEnd
+      if (tempNode === nextNote) {
+        nextNodeIndex = nodeIndex
+      }
 
       // Parse guide color (hex to RGB)
       const color = n.isGold ? goldGuideColor : guideColor
@@ -1049,12 +1101,8 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       g = parseInt(hex.substr(2, 2), 16) / 255
       b = parseInt(hex.substr(4, 2), 16) / 255
 
-      // Gradient effect: fade alpha based on Y position
-      // const gradientPercent = Math.max(
-      //   0,
-      //   Math.min(1, (startY - gY0) / (gY1 - gY0)),
-      // )
-      a = 0.73 //- gradientPercent * 0.53
+      // Alpha will be calculated per-vertex below
+      a = 0.8 // This will be overridden by per-vertex alpha
     } else {
       if (n.isGold) {
         r = 0.98
@@ -1076,7 +1124,23 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       const p0 = computePoint(t0, n, nextNote as HoldTick | HoldEnd, scaledTime)
       const p1 = computePoint(t1, n, nextNote as HoldTick | HoldEnd, scaledTime)
 
-      // Draw trapezoid segment with 3D perspective
+      // Calculate per-vertex alpha for guide notes based on hold tick index
+      let alpha0 = a
+      let alpha1 = a
+      if (n.isGuide) {
+        // Calculate alpha based on node index
+        // Formula: alpha = 0.8 - (nodeIndex / (totalHoldTicks + 1)) * 0.6
+        const divisor = totalHoldTicks + 1
+
+        // For subdivisions, interpolate between current and next node's alpha
+        const alphaStart = 0.8 - (currentNodeIndex / divisor) * 0.6
+        const alphaEnd = 0.8 - (nextNodeIndex / divisor) * 0.6
+
+        alpha0 = alphaStart + t0 * (alphaEnd - alphaStart)
+        alpha1 = alphaStart + t1 * (alphaEnd - alphaStart)
+      }
+
+      // Draw trapezoid segment with 3D perspective and gradient alpha
       drawFilledQuad(
         p0.left,
         p0.y,
@@ -1090,6 +1154,10 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
         g,
         b,
         a,
+        alpha0,
+        alpha0,
+        alpha1,
+        alpha1,
       )
     }
   }
