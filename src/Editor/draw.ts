@@ -57,7 +57,7 @@ let isPasting = false
 let hideTickOutlines = false
 let hideTickOutlinesOnPlay = true
 
-// let isShiftPressed = false
+let isShiftPressed = false
 let isCtrlPressed = false
 let isAltPressed = false
 
@@ -1067,17 +1067,18 @@ document.addEventListener('mouseup', () => (mouseIsPressed = false))
 document.addEventListener('wheel', (e) => {
   // e.preventDefault()
   if (isPreviewing) {
-    cursorPos -= (e.deltaY * getBPM(cursorPos)) / 10000
+    cursorPos -=
+      ((e.deltaY * getBPM(cursorPos)) / 10000) * (isShiftPressed ? 2.5 : 1)
     cursorPos = Math.max(0, cursorPos)
   } else {
-    yOffset -= e.deltaY
+    yOffset -= e.deltaY * (isShiftPressed ? 2.5 : 1)
   }
 })
 
 document.addEventListener('keydown', (e) => {
-  // if (e.key === 'Shift') {
-  //   isShiftPressed = true
-  // }
+  if (e.key === 'Shift') {
+    isShiftPressed = true
+  }
 
   if (e.key === 'Control' || e.key === 'Meta') {
     isCtrlPressed = true
@@ -1099,9 +1100,9 @@ document.addEventListener('keyup', (e) => {
     toggleIsPlaying()
   }
 
-  // if (e.key === 'Shift') {
-  //   isShiftPressed = false
-  // }
+  if (e.key === 'Shift') {
+    isShiftPressed = false
+  }
 
   if (e.key === 'Control' || e.key === 'Meta') {
     isCtrlPressed = false

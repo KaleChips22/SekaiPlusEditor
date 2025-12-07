@@ -276,7 +276,7 @@ ipcMain.handle('save-file', async (_, filePath, content) => {
   }
 })
 
-let options = {
+const options = {
   accentColor: 'purple',
   hideTickOutlines: false,
   hideTickOutlinesOnPlay: true,
