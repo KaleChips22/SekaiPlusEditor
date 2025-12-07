@@ -2,11 +2,9 @@ import {
   chartNotes,
   cursorPos,
   getBPM,
-  getHiSpeed,
   getNoteImageName,
   getScaledTime,
   getTime,
-  getTsig,
   goldGuideColor,
   guideColor,
   height,
@@ -27,7 +25,7 @@ import {
 import { getRect } from '../editor/noteImage'
 import * as holdNoteRect from '../sprite_sheet/longNoteLine.json'
 
-const playSpeed = 20
+const playSpeed = 12
 
 export let hasCachedScaledTimes = false
 export const disableCachedScaledTimes = () => (hasCachedScaledTimes = false)
@@ -629,7 +627,7 @@ const getXBounds = (note: Note, currentTime: number): [number, number] => {
   return [leftX, rightX - leftX]
 }
 
-const drawPreviewNote = (note: Note, scaledTime: number) => {
+const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
   if (gl === null) return
   if (
     note.type === 'HiSpeed' ||
@@ -929,7 +927,8 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
         const fh = (0.75 * flickRect.h * box.height) / 1175
         const fx =
           box.x + (box.width - fw) / 2 + note.lane * 4 * laneWidthAtJudgement
-        const fy = y - fh
+        const opacity = 1 - ((flatTime * 2) % 1)
+        const fy = y - fh - (box.height / 10) * (0.5 - opacity)
 
         // Draw flick arrow with old perspective system
         const transformX = (px: number) => {
@@ -965,6 +964,7 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
             flickRect.y,
             flickRect.w,
             flickRect.h,
+            opacity,
           )
         } else {
           drawQuad(
@@ -981,6 +981,7 @@ const drawPreviewNote = (note: Note, scaledTime: number) => {
             flickRect.y,
             flickRect.w,
             flickRect.h,
+            opacity,
           )
         }
       }
@@ -1072,10 +1073,21 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
     let nextNodeIndex = 0
     let totalHoldTicks = 0
     if (n.isGuide) {
-      let pN = note as HoldStart | HoldTick | HoldEnd
-      while (pN.type !== 'HoldStart') pN = pN.prevNode
-      let nN = note as HoldEnd | HoldTick | HoldEnd
-      while (nN.type !== 'HoldEnd') nN = nN.nextNode
+      // Use cached references if available, otherwise traverse
+      const pN =
+        note.holdStart ||
+        (() => {
+          let node = note as HoldStart | HoldTick | HoldEnd
+          while (node.type !== 'HoldStart') node = node.prevNode
+          return node as HoldStart
+        })()
+      // const nN =
+      //   note.holdEnd ||
+      //   (() => {
+      //     let node = note as HoldEnd | HoldTick | HoldEnd
+      //     while (node.type !== 'HoldEnd') node = node.nextNode
+      //     return node as HoldEnd
+      //   })()
 
       // Count total hold ticks and find current node's index
       let tempNode = pN as HoldStart | HoldTick | HoldEnd
@@ -1203,7 +1215,7 @@ const drawPreview = (timeStamp: number) => {
   }
 
   // const bpm = getBPM(cursorPos)
-  // const time = getTime(cursorPos)
+  const flatTime = getTime(cursorPos)
   const scaledTime = getScaledTime(cursorPos)
   // const tSig = getTsig(cursorPos)
   // const hiSpeed = getHiSpeed(cursorPos)
@@ -1280,13 +1292,17 @@ const drawPreview = (timeStamp: number) => {
 
       // find end time for this segment (next non-skip node)
       let endNode: Note = n
-      while ('nextNode' in endNode && endNode.nextNode) {
-        endNode = endNode.nextNode as Note
-        if (
-          'tickType' in endNode &&
-          (endNode as HoldTick).tickType !== TickType.Skip
-        )
-          break
+      if ('holdEnd' in endNode) endNode = endNode.holdEnd as Note
+      else {
+        while ('nextNode' in endNode && endNode.nextNode) {
+          endNode = endNode.nextNode as Note
+          if (
+            'tickType' in endNode &&
+            (endNode as HoldTick).tickType !== TickType.Skip
+          )
+            break
+          ;(n as HoldTick).holdEnd = endNode as HoldEnd
+        }
       }
       const endTime = endNode.scaledHitTime || startTime
 
@@ -1296,7 +1312,7 @@ const drawPreview = (timeStamp: number) => {
       // overlap test
       return endTime >= visibleStart && startTime <= visibleEnd
     })
-    .sort((a, b) => b.scaledHitTime! - a.scaledHitTime!)
+    .sort(orderHolds)
     .forEach((n) => drawPreviewHolds(n as HoldStart | HoldTick, scaledTime))
 
   chartNotes
@@ -1327,9 +1343,41 @@ const drawPreview = (timeStamp: number) => {
       return withinHorizon
     })
     .sort((a, b) => b.scaledHitTime! - a.scaledHitTime!)
-    .forEach((n) => drawPreviewNote(n, scaledTime))
+    .forEach((n) => drawPreviewNote(n, scaledTime, flatTime))
 
   lastTime = timeStamp
+}
+
+const orderHolds = (a: Note, b: Note) => {
+  const timeDiff =
+    getStartTime(a as HoldStart | HoldTick) -
+    getStartTime(b as HoldStart | HoldTick)
+  if (timeDiff !== 0) return timeDiff
+
+  const goldDiff =
+    (a as HoldStart | HoldTick).isGold === (b as HoldStart | HoldTick).isGold
+  if (+goldDiff !== 0) return +goldDiff
+
+  const guideDif =
+    (a as HoldStart | HoldTick).isGuide === (b as HoldStart | HoldTick).isGuide
+  return +guideDif
+}
+
+const getStartTime = (n: HoldStart | HoldTick) => {
+  if (!('holdStart' in n) || !n.holdStart) {
+    if (n.type === 'HoldStart') {
+      n.holdStart = n
+    } else {
+      let hs: HoldStart | HoldTick = n
+      while ('prevNode' in hs && hs.prevNode) {
+        hs = hs.prevNode
+        if (hs.type === 'HoldStart') break
+      }
+      n.holdStart = hs as HoldStart
+    }
+  }
+
+  return n.holdStart.scaledHitTime!
 }
 
 export default drawPreview

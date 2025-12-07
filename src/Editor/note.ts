@@ -55,6 +55,9 @@ export interface HoldStart extends Note {
   easingType: EasingType
 
   nextNode: HoldEnd | HoldTick
+
+  holdStart?: HoldStart
+  holdEnd?: HoldEnd
 }
 
 export interface HoldEnd extends Note {
@@ -70,6 +73,9 @@ export interface HoldEnd extends Note {
   flickDir: FlickDirection
 
   prevNode: HoldStart | HoldTick
+
+  holdStart?: HoldStart
+  holdEnd?: HoldEnd
 }
 
 export interface HoldTick extends Note {
@@ -87,6 +93,9 @@ export interface HoldTick extends Note {
 
   nextNode: HoldEnd | HoldTick
   prevNode: HoldStart | HoldTick
+
+  holdStart?: HoldStart
+  holdEnd?: HoldEnd
 }
 
 export interface BPMChange extends Note {
