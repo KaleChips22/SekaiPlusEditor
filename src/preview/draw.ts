@@ -42,8 +42,8 @@ const textureCache = new Map<HTMLImageElement, WebGLTexture>()
 
 // Text rendering using Canvas2D
 let textCanvas: HTMLCanvasElement | null = null
-let textCtx: CanvasRenderingContext2D | null = null
-let textTexture: WebGLTexture | null = null
+// let textCtx: CanvasRenderingContext2D | null = null
+// let textTexture: WebGLTexture | null = null
 
 export const setPreviewContext = (canvas: HTMLCanvasElement) => {
   gl = canvas.getContext('webgl', {
@@ -62,7 +62,7 @@ export const setPreviewContext = (canvas: HTMLCanvasElement) => {
   textCanvas = document.createElement('canvas')
   textCanvas.width = 512
   textCanvas.height = 512
-  textCtx = textCanvas.getContext('2d')
+  // textCtx = textCanvas.getContext('2d')
 }
 
 const initWebGL = () => {
