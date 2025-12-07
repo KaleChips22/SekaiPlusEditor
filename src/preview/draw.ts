@@ -352,121 +352,121 @@ const drawFilledQuad = (
 }
 
 // Helper to draw a simple rectangle
-const drawRect = (
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-  g: number,
-  b: number,
-  a: number,
-) => {
-  drawFilledQuad(x, y, x + w, y, x + w, y + h, x, y + h, r, g, b, a)
-}
+// const drawRect = (
+//   x: number,
+//   y: number,
+//   w: number,
+//   h: number,
+//   r: number,
+//   g: number,
+//   b: number,
+//   a: number,
+// ) => {
+//   drawFilledQuad(x, y, x + w, y, x + w, y + h, x, y + h, r, g, b, a)
+// }
 
 // Draw text using Canvas2D texture
-const drawText = (
-  text: string,
-  x: number,
-  y: number,
-  fontSize: number = 20,
-  color: string = 'white',
-) => {
-  if (!gl || !textCtx || !textCanvas) return
+// const drawText = (
+//   text: string,
+//   x: number,
+//   y: number,
+//   fontSize: number = 20,
+//   color: string = 'white',
+// ) => {
+//   if (!gl || !textCtx || !textCanvas) return
 
-  // Clear text canvas
-  textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height)
+//   // Clear text canvas
+//   textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height)
 
-  // Draw text to canvas
-  textCtx.fillStyle = color
-  textCtx.font = `${fontSize}px Arial`
-  textCtx.textAlign = 'left'
-  textCtx.textBaseline = 'top'
-  textCtx.fillText(text, 0, 0)
+//   // Draw text to canvas
+//   textCtx.fillStyle = color
+//   textCtx.font = `${fontSize}px Arial`
+//   textCtx.textAlign = 'left'
+//   textCtx.textBaseline = 'top'
+//   textCtx.fillText(text, 0, 0)
 
-  // Measure text
-  const metrics = textCtx.measureText(text)
-  const textWidth = metrics.width
-  const textHeight =
-    metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+//   // Measure text
+//   const metrics = textCtx.measureText(text)
+//   const textWidth = metrics.width
+//   const textHeight =
+//     metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
 
-  // Create/update texture
-  if (!textTexture) {
-    textTexture = gl.createTexture()
-  }
+//   // Create/update texture
+//   if (!textTexture) {
+//     textTexture = gl.createTexture()
+//   }
 
-  gl.bindTexture(gl.TEXTURE_2D, textTexture)
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    textCanvas,
-  )
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+//   gl.bindTexture(gl.TEXTURE_2D, textTexture)
+//   gl.texImage2D(
+//     gl.TEXTURE_2D,
+//     0,
+//     gl.RGBA,
+//     gl.RGBA,
+//     gl.UNSIGNED_BYTE,
+//     textCanvas,
+//   )
+//   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+//   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+//   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+//   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 
-  // Draw text quad
-  if (!shaderProgram) return
+//   // Draw text quad
+//   if (!shaderProgram) return
 
-  gl.useProgram(shaderProgram)
+//   gl.useProgram(shaderProgram)
 
-  const vertices = new Float32Array([
-    x,
-    y,
-    x + textWidth,
-    y,
-    x,
-    y + textHeight,
-    x + textWidth,
-    y,
-    x + textWidth,
-    y + textHeight,
-    x,
-    y + textHeight,
-  ])
+//   const vertices = new Float32Array([
+//     x,
+//     y,
+//     x + textWidth,
+//     y,
+//     x,
+//     y + textHeight,
+//     x + textWidth,
+//     y,
+//     x + textWidth,
+//     y + textHeight,
+//     x,
+//     y + textHeight,
+//   ])
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
-  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW)
+//   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+//   gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW)
 
-  const positionLocation = gl.getAttribLocation(shaderProgram, 'a_position')
-  gl.enableVertexAttribArray(positionLocation)
-  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+//   const positionLocation = gl.getAttribLocation(shaderProgram, 'a_position')
+//   gl.enableVertexAttribArray(positionLocation)
+//   gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
 
-  const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1])
+//   const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1])
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer)
-  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.DYNAMIC_DRAW)
+//   gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer)
+//   gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.DYNAMIC_DRAW)
 
-  const texCoordLocation = gl.getAttribLocation(shaderProgram, 'a_texCoord')
-  gl.enableVertexAttribArray(texCoordLocation)
-  gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0)
+//   const texCoordLocation = gl.getAttribLocation(shaderProgram, 'a_texCoord')
+//   gl.enableVertexAttribArray(texCoordLocation)
+//   gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0)
 
-  const resolutionLocation = gl.getUniformLocation(
-    shaderProgram,
-    'u_resolution',
-  )
-  gl.uniform2f(resolutionLocation, width, height)
+//   const resolutionLocation = gl.getUniformLocation(
+//     shaderProgram,
+//     'u_resolution',
+//   )
+//   gl.uniform2f(resolutionLocation, width, height)
 
-  const alphaLocation = gl.getUniformLocation(shaderProgram, 'u_alpha')
-  gl.uniform1f(alphaLocation, 1.0)
+//   const alphaLocation = gl.getUniformLocation(shaderProgram, 'u_alpha')
+//   gl.uniform1f(alphaLocation, 1.0)
 
-  const useTextureLocation = gl.getUniformLocation(
-    shaderProgram,
-    'u_useTexture',
-  )
-  gl.uniform1i(useTextureLocation, 1)
+//   const useTextureLocation = gl.getUniformLocation(
+//     shaderProgram,
+//     'u_useTexture',
+//   )
+//   gl.uniform1i(useTextureLocation, 1)
 
-  gl.activeTexture(gl.TEXTURE0)
-  gl.bindTexture(gl.TEXTURE_2D, textTexture)
-  gl.uniform1i(gl.getUniformLocation(shaderProgram, 'u_texture'), 0)
+//   gl.activeTexture(gl.TEXTURE0)
+//   gl.bindTexture(gl.TEXTURE_2D, textTexture)
+//   gl.uniform1i(gl.getUniformLocation(shaderProgram, 'u_texture'), 0)
 
-  gl.drawArrays(gl.TRIANGLES, 0, 6)
-}
+//   gl.drawArrays(gl.TRIANGLES, 0, 6)
+// }
 
 const boxRatio = 2048 / 1175
 const box = {
