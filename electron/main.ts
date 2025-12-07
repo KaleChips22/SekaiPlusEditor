@@ -60,6 +60,7 @@ function createWindow() {
     })
 
     win?.webContents.send('update-options', options)
+    win?.webContents.send('version', app.getVersion())
   })
 
   if (VITE_DEV_SERVER_URL) {
