@@ -2344,6 +2344,9 @@ const draw = (timeStamp: number) => {
   if (lastTime == undefined) lastTime = timeStamp
   const deltaTime = timeStamp - lastTime
 
+  ctx.resetTransform()
+  ctx.scale(2 / devicePixelRatio, 2 / devicePixelRatio)
+
   if (hasCachedScaledTimes) disableCachedScaledTimes()
 
   // build tsig segments
