@@ -539,14 +539,14 @@ export const exportUSC = async () => {
 }
 
 export const saveAsPJSK = () => {
-  const pjsk = notesToPJSK(chartNotes, musicOffsetMs)
+  const pjsk = notesToPJSK(chartLayers, chartNotes, musicOffsetMs)
   const pjskString = JSON.stringify(pjsk)
 
   saveFileAs(pjskString)
 }
 
 export const savePJSK = () => {
-  const pjsk = notesToPJSK(chartNotes, musicOffsetMs)
+  const pjsk = notesToPJSK(chartLayers, chartNotes, musicOffsetMs)
   const pjskString = JSON.stringify(pjsk)
 
   saveFile(pjskString)

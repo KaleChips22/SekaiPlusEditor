@@ -49,12 +49,13 @@ export const openFile = () => {
         clearHistory()
       } else {
         updateCurrentFilePath(result.filePath)
-        const { notes, offset } = PJSKToNotes(json)
+        const { notes, offset, layers } = PJSKToNotes(json)
 
         // console.log(notes)
 
         setMusicOffset(offset)
         setChartNotes(notes)
+        setChartLayers(layers)
         clearHistory()
       }
     }

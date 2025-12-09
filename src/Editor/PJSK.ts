@@ -1,6 +1,7 @@
 import {
   BPMChange,
   HiSpeed,
+  HiSpeedLayer,
   HoldEnd,
   HoldStart,
   HoldTick,
@@ -9,7 +10,11 @@ import {
   TimeSignature,
 } from './note'
 
-export const notesToPJSK = (notes: Note[], offset: number) => {
+export const notesToPJSK = (
+  layers: HiSpeedLayer[],
+  notes: Note[],
+  offset: number,
+) => {
   const map = new Map<Note, any>()
   const clones: any[] = []
 
@@ -27,7 +32,8 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
         isGold: t.isGold,
         isTrace: t.isTrace,
         flickDir: t.flickDir,
-      } as TapNote
+        layer: t.layer ? layers.indexOf(t.layer) : undefined,
+      } as any
     } else if (n.type === 'HoldStart') {
       const h = n as HoldStart
       c = {
@@ -42,7 +48,8 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
         easingType: h.easingType,
         // placeholders; will rewire after all clones are created
         nextNode: {} as HoldEnd,
-      } as HoldStart
+        layer: h.layer ? layers.indexOf(h.layer) : undefined,
+      } as any
     } else if (n.type === 'HoldTick') {
       const h = n as HoldTick
       c = {
@@ -56,7 +63,8 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
         easingType: h.easingType,
         nextNode: {} as HoldEnd,
         prevNode: {} as HoldStart,
-      } as HoldTick
+        layer: h.layer ? layers.indexOf(h.layer) : undefined,
+      } as any
     } else if (n.type === 'HoldEnd') {
       const h = n as HoldEnd
       c = {
@@ -69,7 +77,8 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
         isHidden: h.isHidden,
         flickDir: h.flickDir,
         prevNode: {} as HoldStart,
-      } as HoldEnd
+        layer: h.layer ? layers.indexOf(h.layer) : undefined,
+      } as any
     } else if (n.type === 'BPMChange') {
       const b = n as BPMChange
       c = {
@@ -78,7 +87,7 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
         lane: 0,
         size: 0,
         BPM: b.BPM,
-      } as BPMChange
+      } as any
     } else if (n.type === 'HiSpeed') {
       const h = n as HiSpeed
       c = {
@@ -87,7 +96,8 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
         lane: 0,
         size: 0,
         speed: h.speed,
-      } as HiSpeed
+        layer: h.layer ? layers.indexOf(h.layer) : undefined,
+      } as any
     } else if (n.type === 'TimeSignature') {
       const t = n as TimeSignature
       c = {
@@ -97,7 +107,7 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
         size: 0,
         top: t.top,
         bottom: t.bottom,
-      } as TimeSignature
+      } as any
     } else {
       // fallback shallow clone for unknown types
       c = JSON.parse(JSON.stringify(n))
@@ -131,11 +141,15 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
     offset,
     version: 1.0,
     notes: clones,
+    layers: layers.map((layer) => ({ name: layer.name })),
   }
 }
 
 export const PJSKToNotes = (chart: any) => {
   const { notes, offset }: { notes: any[]; offset: number } = chart
+  const layers: HiSpeedLayer[] = chart.layers
+    ? chart.layers.map((layer: any) => ({ name: layer.name }))
+    : [{ name: 'Default Layer' }]
   const map = new Map<any, Note>()
   const clones: Note[] = []
 
@@ -153,6 +167,7 @@ export const PJSKToNotes = (chart: any) => {
         isGold: t.isGold,
         isTrace: t.isTrace,
         flickDir: t.flickDir,
+        layer: typeof t.layer === 'number' ? layers[t.layer] : layers[0],
       } as TapNote
     } else if (n.type === 'HoldStart') {
       const h = n as HoldStart
@@ -168,6 +183,7 @@ export const PJSKToNotes = (chart: any) => {
         easingType: h.easingType,
         // placeholders; will rewire after all clones are created
         nextNode: {} as HoldEnd,
+        layer: typeof h.layer === 'number' ? layers[h.layer] : layers[0],
       } as HoldStart
     } else if (n.type === 'HoldTick') {
       const h = n as HoldTick
@@ -182,6 +198,7 @@ export const PJSKToNotes = (chart: any) => {
         easingType: h.easingType,
         nextNode: {} as HoldEnd,
         prevNode: {} as HoldStart,
+        layer: typeof h.layer === 'number' ? layers[h.layer] : layers[0],
       } as HoldTick
     } else if (n.type === 'HoldEnd') {
       const h = n as HoldEnd
@@ -195,6 +212,7 @@ export const PJSKToNotes = (chart: any) => {
         isHidden: h.isHidden,
         flickDir: h.flickDir,
         prevNode: {} as HoldStart,
+        layer: typeof h.layer === 'number' ? layers[h.layer] : layers[0],
       } as HoldEnd
     } else if (n.type === 'BPMChange') {
       const b = n as BPMChange
@@ -213,6 +231,7 @@ export const PJSKToNotes = (chart: any) => {
         lane: 0,
         size: 0,
         speed: h.speed,
+        layer: typeof h.layer === 'number' ? layers[h.layer] : layers[0],
       } as HiSpeed
     } else if (n.type === 'TimeSignature') {
       const t = n as TimeSignature
@@ -254,5 +273,6 @@ export const PJSKToNotes = (chart: any) => {
   return {
     offset,
     notes: clones,
+    layers,
   }
 }
