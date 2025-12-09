@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
 import ChartProperties from './ChartProperties'
 import NoteOptions from './NoteOptions'
 import Layers from './Layers'
+import { setIsExtendedChart as setEditorExtended } from '../../editor/draw'
 
 const Sidebar = () => {
   const [tabSelection1, setTabSelection1] = useState<
@@ -12,6 +13,18 @@ const Sidebar = () => {
   const [tabSelection2, setTabSelection2] = useState<'options' | 'layers'>(
     'options',
   )
+
+  const [isExtendedChart, setIsExtendedChart] = useState(false)
+
+  useEffect(() => {
+    if (!isExtendedChart && tabSelection2 === 'layers') {
+      setTabSelection2('options')
+    }
+  }, [isExtendedChart, tabSelection2])
+
+  useEffect(() => {
+    setEditorExtended(isExtendedChart)
+  }, [isExtendedChart])
 
   return (
     <>
@@ -41,7 +54,9 @@ const Sidebar = () => {
           </div>*/}
         </div>
         <div className="w-full h-full bg-neutral-700 p-2 text-sm text-white">
-          {tabSelection1 === 'chartProperties' && <ChartProperties />}
+          {tabSelection1 === 'chartProperties' && (
+            <ChartProperties setIsExtendedChart={setIsExtendedChart} />
+          )}
           {/*{tabSelection1 === 'noteProperties' && <div>TODO</div>}*/}
         </div>
         <div className="pt-1 flex-1 text-xs bg-neutral-800 border-b border-accent flex">
@@ -54,15 +69,17 @@ const Sidebar = () => {
           >
             Options
           </div>
-          <div
-            className={twMerge(
-              'px-1 py-0.5 text-white rounded-t-xs ml-1 line-clamp-1',
-              tabSelection2 === 'layers' ? 'bg-accent' : 'bg-neutral-700',
-            )}
-            onClick={() => setTabSelection2('layers')}
-          >
-            Layers
-          </div>
+          {isExtendedChart && (
+            <div
+              className={twMerge(
+                'px-1 py-0.5 text-white rounded-t-xs ml-1 line-clamp-1',
+                tabSelection2 === 'layers' ? 'bg-accent' : 'bg-neutral-700',
+              )}
+              onClick={() => setTabSelection2('layers')}
+            >
+              Layers
+            </div>
+          )}
         </div>
         <div className="w-full h-[50%] bg-neutral-700 p-2 text-sm text-white overflow-y-scroll">
           {tabSelection2 === 'options' && <NoteOptions />}

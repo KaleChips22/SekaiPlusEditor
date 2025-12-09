@@ -2,12 +2,16 @@ import {
   clearHistory,
   setChartLayers,
   setChartNotes,
+  setIsExtendedChart,
   setMusicOffset,
+  setSelectedLayerIndex,
+  setChartMetadata,
+  resetChartMetadata,
 } from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
 import { susToUSC } from './SUStoUSC'
-import { TimeSignature } from './note'
+import { BPMChange, HiSpeed, TimeSignature } from './note'
 // import { uscToLevelData } from './USCtoLevelData'
 
 let currentFilePath: string | null = null
@@ -46,17 +50,26 @@ export const openFile = () => {
         setMusicOffset(offset)
         setChartNotes(notes)
         setChartLayers(hiSpeedLayers)
+        resetChartMetadata()
         clearHistory()
+        window.dispatchEvent(new CustomEvent('metadataLoaded'))
       } else {
         updateCurrentFilePath(result.filePath)
-        const { notes, offset, layers } = PJSKToNotes(json)
+        const { notes, offset, layers, isExtendedChart, metadata } =
+          PJSKToNotes(json)
 
         // console.log(notes)
 
+        setIsExtendedChart(true)
         setMusicOffset(offset)
         setChartNotes(notes)
         setChartLayers(layers)
+        setIsExtendedChart(isExtendedChart)
+        if (metadata) {
+          setChartMetadata(metadata)
+        }
         clearHistory()
+        window.dispatchEvent(new CustomEvent('metadataLoaded'))
       }
     }
   }
@@ -94,7 +107,46 @@ export const newFile = () => {
   )
     return
 
-  setChartNotes([])
+  setIsExtendedChart(true)
+
+  setChartNotes([
+    {
+      beat: 0,
+      lane: 0,
+      size: 0,
+      type: 'HiSpeed',
+      speed: 1,
+    } as HiSpeed,
+    {
+      beat: 0,
+      lane: 0,
+      size: 0,
+      type: 'TimeSignature',
+      bottom: 4,
+      top: 4,
+    } as TimeSignature,
+    {
+      beat: 0,
+      lane: 0,
+      size: 0,
+      type: 'BPMChange',
+      BPM: 160,
+    } as BPMChange,
+  ])
+
+  setChartLayers([
+    {
+      name: 'default',
+    },
+  ])
+
+  setSelectedLayerIndex(0)
+
+  setIsExtendedChart(false)
+
+  resetChartMetadata()
+
   updateCurrentFilePath(null)
   clearHistory()
+  window.dispatchEvent(new CustomEvent('metadataLoaded'))
 }

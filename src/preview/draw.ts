@@ -20,6 +20,7 @@ import {
   HoldStart,
   TapNote,
   TickType,
+  type HiSpeedLayer,
   type HoldTick,
   type Note,
 } from '../editor/note'
@@ -1216,6 +1217,12 @@ const drawPreview = (timeStamp: number) => {
     hasCachedScaledTimes = true
   }
 
+  // Pre-calculate scaled times for cursor position for each layer
+  const cursorScaledTimesByLayer = new Map<HiSpeedLayer, number>()
+  chartLayers.forEach((layer) => {
+    cursorScaledTimesByLayer.set(layer, getScaledTime(cursorPos, layer))
+  })
+
   // const bpm = getBPM(cursorPos)
   const flatTime = getTime(cursorPos)
   // const scaledTime = getScaledTime(cursorPos)
@@ -1308,7 +1315,8 @@ const drawPreview = (timeStamp: number) => {
       }
       const endTime = endNode.scaledHitTime || startTime
 
-      const visibleStart = getScaledTime(cursorPos, (n as TapNote).layer)
+      const visibleStart =
+        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0
       const visibleEnd = visibleStart + horizon
 
       // overlap test
@@ -1318,18 +1326,20 @@ const drawPreview = (timeStamp: number) => {
     .forEach((n) =>
       drawPreviewHolds(
         n as HoldStart | HoldTick,
-        getScaledTime(cursorPos, (n as TapNote).layer),
+        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0,
       ),
     )
 
   chartNotes
     .filter((n) => !['HiSpeed', 'TimeSignature', 'BPMChange'].includes(n.type))
     .filter((n) => {
+      const cursorScaledTime =
+        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0
+
       // Always draw normal upcoming notes within the horizon
       const withinHorizon =
-        getScaledTime(cursorPos, (n as TapNote).layer) <= n.scaledHitTime! &&
-        n.scaledHitTime! - getScaledTime(cursorPos, (n as TapNote).layer) <=
-          10 / playSpeed
+        cursorScaledTime <= n.scaledHitTime! &&
+        n.scaledHitTime! - cursorScaledTime <= 10 / playSpeed
 
       // Special-case: keep HoldStart head drawn at judgement while the hold is active
       if (n.type === 'HoldStart') {
@@ -1343,8 +1353,7 @@ const drawPreview = (timeStamp: number) => {
 
         // if the hold has started but not yet ended, keep its head visible
         const holdActive =
-          getScaledTime(cursorPos, (n as TapNote).layer) > n.scaledHitTime! &&
-          getScaledTime(cursorPos, (n as TapNote).layer) <= endTime!
+          cursorScaledTime > n.scaledHitTime! && cursorScaledTime <= endTime!
 
         return withinHorizon || holdActive
       }
@@ -1355,7 +1364,7 @@ const drawPreview = (timeStamp: number) => {
     .forEach((n) =>
       drawPreviewNote(
         n,
-        getScaledTime(cursorPos, (n as TapNote).layer),
+        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0,
         flatTime,
       ),
     )

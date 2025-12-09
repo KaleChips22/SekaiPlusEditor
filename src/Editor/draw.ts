@@ -99,6 +99,44 @@ export const setNextNoteOptions = (options: Partial<NextNoteOptions>) => {
 let musicScoreName = ''
 export const setMusicScoreName = (name: string) => (musicScoreName = name)
 
+export interface ChartMetadata {
+  title: string
+  designer: string
+  artist: string
+  jacket: string
+  masterVolume: number
+  BGMVolume: number
+  SEVolume: number
+}
+
+let chartMetadata: ChartMetadata = {
+  title: '',
+  designer: '',
+  artist: '',
+  jacket: '',
+  masterVolume: 100,
+  BGMVolume: 100,
+  SEVolume: 100,
+}
+
+export const getChartMetadata = () => chartMetadata
+
+export const setChartMetadata = (metadata: Partial<ChartMetadata>) => {
+  chartMetadata = { ...chartMetadata, ...metadata }
+}
+
+export const resetChartMetadata = () => {
+  chartMetadata = {
+    title: '',
+    designer: '',
+    artist: '',
+    jacket: '',
+    masterVolume: 100,
+    BGMVolume: 100,
+    SEVolume: 100,
+  }
+}
+
 const musicPlayer = new Audio()
 let currentMusicUrl: string | null = null
 
@@ -290,6 +328,7 @@ export let chartLayers: HiSpeedLayer[] = [
   },
 ]
 export const addChartLayer = (name: string) => {
+  if (!isExtendedChart) return
   const newLayer: HiSpeedLayer = { name }
   chartLayers.push(newLayer)
   chartNotes.push({
@@ -303,8 +342,11 @@ export const addChartLayer = (name: string) => {
 
   updateOffsetCache()
 }
-export const setChartLayers = (layers: HiSpeedLayer[]) => (chartLayers = layers)
+export const setChartLayers = (layers: HiSpeedLayer[]) => {
+  chartLayers = layers
+}
 export const removeChartLayer = (layer: HiSpeedLayer) => {
+  if (!isExtendedChart) return
   if (chartLayers.length === 1) return
   const index = chartLayers.findIndex((l) => l === layer)
   if (index === -1) return
@@ -317,8 +359,10 @@ export const removeChartLayer = (layer: HiSpeedLayer) => {
   chartLayers.splice(index, 1)
 }
 export let selectedLayerIndex = 0
-export const setSelectedLayerIndex = (index: number) =>
-  (selectedLayerIndex = index)
+export const setSelectedLayerIndex = (index: number) => {
+  if (!isExtendedChart) selectedLayerIndex = 0
+  else selectedLayerIndex = index
+}
 
 export const chartNotes: Note[] = [
   {
@@ -453,6 +497,14 @@ export const setChartNotes = (notes: Note[]) => {
   _eventOffsetCache = computeEventOffsets()
 }
 
+export let isExtendedChart = false
+
+export const getIsExtendedChart = () => isExtendedChart
+
+export const setIsExtendedChart = (value: boolean) => {
+  isExtendedChart = value
+}
+
 /**
  * Save the current chart state to history before making modifications
  */
@@ -539,14 +591,26 @@ export const exportUSC = async () => {
 }
 
 export const saveAsPJSK = () => {
-  const pjsk = notesToPJSK(chartLayers, chartNotes, musicOffsetMs)
+  const pjsk = notesToPJSK(
+    chartLayers,
+    chartNotes,
+    musicOffsetMs,
+    isExtendedChart,
+    chartMetadata,
+  )
   const pjskString = JSON.stringify(pjsk)
 
   saveFileAs(pjskString)
 }
 
 export const savePJSK = () => {
-  const pjsk = notesToPJSK(chartLayers, chartNotes, musicOffsetMs)
+  const pjsk = notesToPJSK(
+    chartLayers,
+    chartNotes,
+    musicOffsetMs,
+    isExtendedChart,
+    chartMetadata,
+  )
   const pjskString = JSON.stringify(pjsk)
 
   saveFile(pjskString)

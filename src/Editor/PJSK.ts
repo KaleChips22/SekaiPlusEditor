@@ -9,11 +9,14 @@ import {
   TapNote,
   TimeSignature,
 } from './note'
+import { ChartMetadata } from './draw'
 
 export const notesToPJSK = (
   layers: HiSpeedLayer[],
   notes: Note[],
   offset: number,
+  isExtendedChart: boolean,
+  metadata?: ChartMetadata,
 ) => {
   const map = new Map<Note, any>()
   const clones: any[] = []
@@ -142,11 +145,31 @@ export const notesToPJSK = (
     version: 1.0,
     notes: clones,
     layers: layers.map((layer) => ({ name: layer.name })),
+    isExtendedChart,
+    metadata: metadata || {
+      title: '',
+      designer: '',
+      artist: '',
+      jacket: '',
+      masterVolume: 100,
+      BGMVolume: 100,
+      SEVolume: 100,
+    },
   }
 }
 
 export const PJSKToNotes = (chart: any) => {
-  const { notes, offset }: { notes: any[]; offset: number } = chart
+  const {
+    notes,
+    offset,
+    isExtendedChart,
+    metadata,
+  }: {
+    notes: any[]
+    offset: number
+    isExtendedChart: boolean
+    metadata?: ChartMetadata
+  } = chart
   const layers: HiSpeedLayer[] = chart.layers
     ? chart.layers.map((layer: any) => ({ name: layer.name }))
     : [{ name: 'Default Layer' }]
@@ -274,5 +297,15 @@ export const PJSKToNotes = (chart: any) => {
     offset,
     notes: clones,
     layers,
+    isExtendedChart,
+    metadata: metadata || {
+      title: '',
+      designer: '',
+      artist: '',
+      jacket: '',
+      masterVolume: 100,
+      BGMVolume: 100,
+      SEVolume: 100,
+    },
   }
 }
