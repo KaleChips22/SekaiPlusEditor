@@ -36,6 +36,8 @@ export interface TapNote extends Note {
   lane: number
   size: number
 
+  layer: HiSpeedLayer
+
   isGold: boolean
   isTrace: boolean
   flickDir: FlickDirection
@@ -56,6 +58,8 @@ export interface HoldStart extends Note {
 
   nextNode: HoldEnd | HoldTick
 
+  layer: HiSpeedLayer
+
   holdStart?: HoldStart
   holdEnd?: HoldEnd
 }
@@ -73,6 +77,8 @@ export interface HoldEnd extends Note {
   flickDir: FlickDirection
 
   prevNode: HoldStart | HoldTick
+
+  layer: HiSpeedLayer
 
   holdStart?: HoldStart
   holdEnd?: HoldEnd
@@ -94,6 +100,8 @@ export interface HoldTick extends Note {
   nextNode: HoldEnd | HoldTick
   prevNode: HoldStart | HoldTick
 
+  layer: HiSpeedLayer
+
   holdStart?: HoldStart
   holdEnd?: HoldEnd
 }
@@ -112,6 +120,8 @@ export interface HiSpeed extends Note {
   lane: 0
   beat: number
   speed: number
+
+  layer: HiSpeedLayer
 }
 
 export interface TimeSignature extends Note {
@@ -121,4 +131,8 @@ export interface TimeSignature extends Note {
   beat: number
   top: number
   bottom: number
+}
+
+export interface HiSpeedLayer {
+  name: string
 }

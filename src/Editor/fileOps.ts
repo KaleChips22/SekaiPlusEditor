@@ -1,4 +1,9 @@
-import { clearHistory, setChartNotes, setMusicOffset } from './draw'
+import {
+  clearHistory,
+  setChartLayers,
+  setChartNotes,
+  setMusicOffset,
+} from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
 import { susToUSC } from './SUStoUSC'
@@ -11,7 +16,7 @@ const updateCurrentFilePath = (s: string | null) => (currentFilePath = s)
 export const openFile = () => {
   // const input = document.createElement('input')
   // input.type = 'file'
-  // input.accept = '.usc,.json,.pjsk'
+  // input.accept = '.usc,.json,.pjsk,.sus'
   // window.ipcRenderer.send('open-file')
   const loadFile = async () => {
     const result = await window.ipcRenderer.openFile()
@@ -27,7 +32,7 @@ export const openFile = () => {
       if ('usc' in json) {
         console.log(json)
         updateCurrentFilePath(null)
-        const { notes, offset } = USCToNotes(json as any)
+        const { notes, offset, hiSpeedLayers } = USCToNotes(json as any)
 
         notes.push({
           beat: 0,
@@ -40,6 +45,7 @@ export const openFile = () => {
 
         setMusicOffset(offset)
         setChartNotes(notes)
+        setChartLayers(hiSpeedLayers)
         clearHistory()
       } else {
         updateCurrentFilePath(result.filePath)

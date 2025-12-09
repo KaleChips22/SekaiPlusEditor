@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { twMerge } from 'tailwind-merge'
 import ChartProperties from './ChartProperties'
 import NoteOptions from './NoteOptions'
+import Layers from './Layers'
 
 const Sidebar = () => {
   const [tabSelection1, setTabSelection1] = useState<
     'chartProperties' | 'noteProperties'
   >('chartProperties')
 
-  const [tabSelection2, setTabSelection2] = useState<'options'>('options')
+  const [tabSelection2, setTabSelection2] = useState<'options' | 'layers'>(
+    'options',
+  )
 
   return (
     <>
@@ -51,9 +54,19 @@ const Sidebar = () => {
           >
             Options
           </div>
+          <div
+            className={twMerge(
+              'px-1 py-0.5 text-white rounded-t-xs ml-1 line-clamp-1',
+              tabSelection2 === 'layers' ? 'bg-accent' : 'bg-neutral-700',
+            )}
+            onClick={() => setTabSelection2('layers')}
+          >
+            Layers
+          </div>
         </div>
-        <div className="w-full h-[50%] bg-neutral-700 p-2 text-sm text-white">
+        <div className="w-full h-[50%] bg-neutral-700 p-2 text-sm text-white overflow-y-scroll">
           {tabSelection2 === 'options' && <NoteOptions />}
+          {tabSelection2 === 'layers' && <Layers />}
         </div>
       </div>
     </>

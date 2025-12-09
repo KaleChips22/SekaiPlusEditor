@@ -31,6 +31,8 @@ class Entity {
   }
 
   export() {
+    console.log(this.data)
+
     return {
       name: this.name,
       archetype: this.archetype,
@@ -58,17 +60,17 @@ class Entity {
 }
 
 const DIRECTIONS = {
-  left: 1,
+  upLeft: 1,
   up: 0,
-  right: 2,
+  upRight: 2,
 }
 
 const CONNECTOR_EASES = {
-  outin: 5,
+  outIn: 5,
   out: 3,
   linear: 1,
   in: 2,
-  inout: 4,
+  inOut: 4,
 }
 
 const GUIDE_COLORS = {
@@ -188,7 +190,7 @@ export const USCtoLevelData = (usc: any) => {
       lane: note.lane || 0,
       size: note.size || 1,
       direction:
-        DIRECTIONS[(note.direction as 'left' | 'right' | 'up') ?? 'up'],
+        DIRECTIONS[(note.direction as 'upLeft' | 'upRight' | 'up') ?? 'up'],
       isAttached: 0,
       connectorEase: 1,
       isSeparator: 0,
@@ -290,7 +292,7 @@ export const USCtoLevelData = (usc: any) => {
         lane: note.lane || 0,
         size: note.size || 1,
         direction:
-          DIRECTIONS[(note.direction as 'up' | 'left' | 'right') ?? 'up'],
+          DIRECTIONS[(note.direction as 'up' | 'upLeft' | 'upRight') ?? 'up'],
         isAttached: isAttached ? 1 : 0,
         connectorEase:
           CONNECTOR_EASES[

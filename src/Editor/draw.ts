@@ -5,6 +5,7 @@ import {
   EasingType,
   FlickDirection,
   HiSpeed,
+  HiSpeedLayer,
   HoldEnd,
   HoldStart,
   HoldTick,
@@ -283,6 +284,42 @@ export const setMusic = (file: File) => {
 const imageSource = document.createElement('img')
 imageSource.src = 'editor_sprites/notes.png'
 
+export let chartLayers: HiSpeedLayer[] = [
+  {
+    name: 'default',
+  },
+]
+export const addChartLayer = (name: string) => {
+  const newLayer: HiSpeedLayer = { name }
+  chartLayers.push(newLayer)
+  chartNotes.push({
+    type: 'HiSpeed',
+    beat: 0,
+    size: 0,
+    lane: 0,
+    speed: 1,
+    layer: newLayer,
+  } as HiSpeed)
+
+  updateOffsetCache()
+}
+export const setChartLayers = (layers: HiSpeedLayer[]) => (chartLayers = layers)
+export const removeChartLayer = (layer: HiSpeedLayer) => {
+  if (chartLayers.length === 1) return
+  const index = chartLayers.findIndex((l) => l === layer)
+  if (index === -1) return
+
+  chartNotes.map((note) => {
+    if ('layer' in note && note.layer === layer) {
+      note.layer = chartLayers[0]
+    }
+  })
+  chartLayers.splice(index, 1)
+}
+export let selectedLayerIndex = 0
+export const setSelectedLayerIndex = (index: number) =>
+  (selectedLayerIndex = index)
+
 export const chartNotes: Note[] = [
   {
     type: 'HiSpeed',
@@ -290,6 +327,7 @@ export const chartNotes: Note[] = [
     size: 0,
     lane: 0,
     speed: 1,
+    layer: chartLayers[0],
   } as HiSpeed,
   {
     type: 'TimeSignature',
@@ -467,7 +505,7 @@ export const clearHistory = () => {
 }
 
 export const exportUSC = async () => {
-  const uscFile = notesToUSC(chartNotes, musicOffsetMs)
+  const uscFile = notesToUSC(chartLayers, chartNotes, musicOffsetMs)
   const uscContent = JSON.stringify(uscFile)
   const levelData = JSON.stringify(USCtoLevelData(uscFile.usc))
   // const levelData = JSON.stringify(uscToLevelData(uscFile.usc))
@@ -606,8 +644,17 @@ export const selectAll = () => {
   if (isPreviewing) return
 
   for (let i = 0; i < chartNotes.length; i++) {
-    if (!['BPMChange', 'HiSpeed', 'TimeSignature'].includes(chartNotes[i].type))
+    if (
+      !['BPMChange', 'HiSpeed', 'TimeSignature'].includes(chartNotes[i].type)
+    ) {
+      if (
+        'layer' in chartNotes[i] &&
+        chartNotes[i].layer !== chartLayers[selectedLayerIndex]
+      )
+        continue
+
       selectedIndeces.add(i)
+    }
   }
 }
 
@@ -1065,6 +1112,8 @@ document.addEventListener('mousedown', () => (mouseIsPressed = true))
 document.addEventListener('mouseup', () => (mouseIsPressed = false))
 
 document.addEventListener('wheel', (e) => {
+  if (mouseX === null || mouseY === null) return
+
   // e.preventDefault()
   if (isPreviewing) {
     cursorPos -=
@@ -1076,6 +1125,7 @@ document.addEventListener('wheel', (e) => {
 })
 
 document.addEventListener('keydown', (e) => {
+  if (document.activeElement?.tagName === 'INPUT') return
   if (e.key === 'Shift') {
     isShiftPressed = true
   }
@@ -1090,6 +1140,7 @@ document.addEventListener('keydown', (e) => {
 })
 
 document.addEventListener('keyup', (e) => {
+  if (document.activeElement?.tagName === 'INPUT') return
   if (e.key === 'Enter') {
     yOffset = -150
     cursorPos = 0
@@ -1155,7 +1206,7 @@ export const getTime = (beat: number) => {
   return time
 }
 
-export const getScaledTime = (beat: number) => {
+export const getScaledTime = (beat: number, layer: HiSpeedLayer) => {
   let time = 0
   let currentBeat = 0
   let speed = 1
@@ -1164,7 +1215,10 @@ export const getScaledTime = (beat: number) => {
   // Get all BPM and HiSpeed changes up to the target beat, sorted by beat
   const changes = chartNotes
     .filter(
-      (n) => (n.type === 'BPMChange' || n.type === 'HiSpeed') && n.beat <= beat,
+      (n) =>
+        (n.type === 'BPMChange' ||
+          (n.type === 'HiSpeed' && (n as HiSpeed).layer === layer)) &&
+        n.beat <= beat,
     )
     .sort((a, b) => a.beat - b.beat)
 
@@ -1643,6 +1697,9 @@ export const getNoteImageName = (n: Note): string => {
 const drawNote = (n: Note) => {
   if (ctx === null) return
 
+  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+    ctx.globalAlpha *= 0.5
+
   const { lane, beat, size } = n
 
   if (n.type === 'HiSpeed') {
@@ -1679,6 +1736,9 @@ const drawNote = (n: Note) => {
     ctx.textBaseline = 'bottom'
     ctx.fillText(`${note.speed}x`, lanesEdge + startX + 8, y - 8)
 
+    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+      ctx.globalAlpha *= 2
+
     return
   } else if (n.type === 'TimeSignature') {
     const note = n as TimeSignature
@@ -1713,6 +1773,9 @@ const drawNote = (n: Note) => {
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
     ctx.fillText(`${note.top}/${note.bottom}`, lanesEdge + startX + 8, y - 8)
+
+    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+      ctx.globalAlpha *= 2
 
     return
   } else if (n.type === 'BPMChange') {
@@ -1749,6 +1812,9 @@ const drawNote = (n: Note) => {
     ctx.textBaseline = 'bottom'
     ctx.fillText(note.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
 
+    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+      ctx.globalAlpha *= 2
+
     return
   }
 
@@ -1771,8 +1837,12 @@ const drawNote = (n: Note) => {
     }
   } else {
     const noteImageName = getNoteImageName(n)
-    if (noteImageName === 'none') return
-    else if (noteImageName === 'hidden') {
+    if (noteImageName === 'none') {
+      if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+        ctx.globalAlpha *= 2
+
+      return
+    } else if (noteImageName === 'hidden') {
       ctx.beginPath()
       ctx.roundRect(x, y + 16, w, h - 32, 4)
 
@@ -1782,6 +1852,9 @@ const drawNote = (n: Note) => {
       ctx.lineWidth = 3
       ctx.fill()
       ctx.stroke()
+      if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+        ctx.globalAlpha *= 2
+
       return
     }
 
@@ -1910,17 +1983,28 @@ const drawNote = (n: Note) => {
       )
     }
   }
+
+  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+    ctx.globalAlpha *= 2
 }
 
 const drawFlickArrow = (n: Note) => {
   if (ctx === null) return
+
+  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+    ctx.globalAlpha *= 0.5
 
   const { lane, beat } = n
 
   const noteImageName = getNoteImageName(n)
 
   const rect = getRect(noteImageName)!
-  if (['none', 'tick', 'hidden'].includes(noteImageName)) return
+  if (['none', 'tick', 'hidden'].includes(noteImageName)) {
+    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+      ctx.globalAlpha *= 2
+
+    return
+  }
 
   const aspectRatio = rect.h / NOTE_HEIGHT
 
@@ -1965,6 +2049,9 @@ const drawFlickArrow = (n: Note) => {
       if (note.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
     }
   }
+
+  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+    ctx.globalAlpha *= 2
 }
 
 const drawSelectionOutline = (n: Note) => {
@@ -1995,6 +2082,9 @@ const drawHoldLine = (n: Note) => {
 
   if (note.type === 'HoldTick' && (note as HoldTick).tickType === TickType.Skip)
     return
+
+  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+    ctx.globalAlpha *= 0.5
 
   while ('nextNode' in nextNote && nextNote.tickType === TickType.Skip) {
     nextNote = nextNote.nextNode
@@ -2114,6 +2204,9 @@ const drawHoldLine = (n: Note) => {
     else ctx.fillStyle = '#7fffd3aa'
   }
   ctx.fill()
+
+  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
+    ctx.globalAlpha *= 2
 }
 
 const TICKS_PER_BEAT = 480
@@ -2174,6 +2267,7 @@ export const splitHold = () => {
   newStart.beat = note.beat
   newStart.lane = note.lane
   newStart.size = note.size
+  newStart.layer = note.layer
   newStart.easingType = note.easingType
   newStart.nextNode = afterNotes.sort((a, b) => a.beat - b.beat)[0]
   newStart.nextNode.prevNode = newStart
@@ -2183,6 +2277,7 @@ export const splitHold = () => {
   newEnd.beat = note.beat
   newEnd.lane = note.lane
   newEnd.size = note.size
+  newEnd.layer = note.layer
   newEnd.prevNode = beforeNotes.sort((a, b) => b.beat - a.beat)[0]
   newEnd.prevNode.nextNode = newEnd
 
@@ -2222,6 +2317,7 @@ export const connectHolds = () => {
     isGold: start.isGold,
     isGuide: start.isGuide,
     nextNode: start.nextNode,
+    layer: start.layer,
     type: 'HoldTick',
     tickType: TickType.Normal,
   } as HoldTick
@@ -2234,6 +2330,7 @@ export const connectHolds = () => {
     isGold: end.isGold,
     prevNode: end.prevNode,
     nextNode: newStartTick,
+    layer: end.layer,
     type: 'HoldTick',
     tickType: TickType.Normal,
   } as HoldTick
@@ -2323,6 +2420,7 @@ export const repeatHoldMids = () => {
         prevNode: prev,
         tickType:
           'tickType' in currentRep ? currentRep.tickType : TickType.Normal,
+        layer: currentRep.layer,
       } as HoldTick
 
       prev.nextNode = nextMid
@@ -2589,6 +2687,9 @@ const draw = (timeStamp: number) => {
     // Filter notes by pixel distance (max 20px in y-direction) and x-position within note bounds
     const candidateNotes = chartNotes
       .map((n, index) => {
+        if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex]) {
+          return null
+        }
         if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
           const o =
             width / 2 +
@@ -2847,6 +2948,7 @@ const draw = (timeStamp: number) => {
               size: 0,
               type: 'HiSpeed',
               speed: 1,
+              layer: chartLayers[selectedLayerIndex],
             } as HiSpeed
 
             chartNotes.push(newNote)
@@ -2866,6 +2968,7 @@ const draw = (timeStamp: number) => {
             isGold: false,
             isTrace: false,
             easingType: EasingType.Linear,
+            layer: chartLayers[selectedLayerIndex],
             isGuide: globalState.selectedTool === 7,
             isHidden: globalState.selectedTool === 7,
           } as HoldStart
@@ -2879,6 +2982,7 @@ const draw = (timeStamp: number) => {
             isGold: false,
             isTrace: false,
             flickDir: FlickDirection.None,
+            layer: chartLayers[selectedLayerIndex],
             isHidden: globalState.selectedTool === 7,
             prevNode: newStartNote,
           } as HoldEnd
@@ -2948,6 +3052,7 @@ const draw = (timeStamp: number) => {
                 ? TickType.Hidden
                 : nextNoteOptions.tickType,
               easingType: EasingType.Linear,
+              layer: chartLayers[selectedLayerIndex],
               nextNode: end,
               prevNode: base,
             } as HoldTick
@@ -2973,6 +3078,7 @@ const draw = (timeStamp: number) => {
               globalState.selectedTool === 4
                 ? nextNoteOptions.flickDir
                 : FlickDirection.None,
+            layer: chartLayers[selectedLayerIndex],
           } as TapNote
 
           chartNotes.push(newNote)
@@ -3005,6 +3111,9 @@ const draw = (timeStamp: number) => {
 
       chartNotes
         .filter((n) => {
+          if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex]) {
+            return false
+          }
           if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
             const o =
               width / 2 +

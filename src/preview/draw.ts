@@ -1,4 +1,5 @@
 import {
+  chartLayers,
   chartNotes,
   cursorPos,
   getBPM,
@@ -1207,16 +1208,17 @@ const drawPreview = (timeStamp: number) => {
 
   if (!hasCachedScaledTimes) {
     chartNotes.forEach((note) => {
-      if (!('scaledHitTime' in note)) {
-        note.scaledHitTime = getScaledTime(note.beat)
-      }
+      note.scaledHitTime = getScaledTime(
+        note.beat,
+        (note as TapNote)?.layer || chartLayers[0],
+      )
     })
     hasCachedScaledTimes = true
   }
 
   // const bpm = getBPM(cursorPos)
   const flatTime = getTime(cursorPos)
-  const scaledTime = getScaledTime(cursorPos)
+  // const scaledTime = getScaledTime(cursorPos)
   // const tSig = getTsig(cursorPos)
   // const hiSpeed = getHiSpeed(cursorPos)
 
@@ -1306,22 +1308,28 @@ const drawPreview = (timeStamp: number) => {
       }
       const endTime = endNode.scaledHitTime || startTime
 
-      const visibleStart = scaledTime
-      const visibleEnd = scaledTime + horizon
+      const visibleStart = getScaledTime(cursorPos, (n as TapNote).layer)
+      const visibleEnd = visibleStart + horizon
 
       // overlap test
       return endTime >= visibleStart && startTime <= visibleEnd
     })
     .sort(orderHolds)
-    .forEach((n) => drawPreviewHolds(n as HoldStart | HoldTick, scaledTime))
+    .forEach((n) =>
+      drawPreviewHolds(
+        n as HoldStart | HoldTick,
+        getScaledTime(cursorPos, (n as TapNote).layer),
+      ),
+    )
 
   chartNotes
     .filter((n) => !['HiSpeed', 'TimeSignature', 'BPMChange'].includes(n.type))
     .filter((n) => {
       // Always draw normal upcoming notes within the horizon
       const withinHorizon =
-        scaledTime <= n.scaledHitTime! &&
-        n.scaledHitTime! - scaledTime <= 10 / playSpeed
+        getScaledTime(cursorPos, (n as TapNote).layer) <= n.scaledHitTime! &&
+        n.scaledHitTime! - getScaledTime(cursorPos, (n as TapNote).layer) <=
+          10 / playSpeed
 
       // Special-case: keep HoldStart head drawn at judgement while the hold is active
       if (n.type === 'HoldStart') {
@@ -1335,7 +1343,8 @@ const drawPreview = (timeStamp: number) => {
 
         // if the hold has started but not yet ended, keep its head visible
         const holdActive =
-          scaledTime > n.scaledHitTime! && scaledTime <= endTime!
+          getScaledTime(cursorPos, (n as TapNote).layer) > n.scaledHitTime! &&
+          getScaledTime(cursorPos, (n as TapNote).layer) <= endTime!
 
         return withinHorizon || holdActive
       }
@@ -1343,7 +1352,13 @@ const drawPreview = (timeStamp: number) => {
       return withinHorizon
     })
     .sort((a, b) => b.scaledHitTime! - a.scaledHitTime!)
-    .forEach((n) => drawPreviewNote(n, scaledTime, flatTime))
+    .forEach((n) =>
+      drawPreviewNote(
+        n,
+        getScaledTime(cursorPos, (n as TapNote).layer),
+        flatTime,
+      ),
+    )
 
   lastTime = timeStamp
 }
