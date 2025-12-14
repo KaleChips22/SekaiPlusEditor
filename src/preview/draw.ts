@@ -16,12 +16,9 @@ import {
 import {
   EasingType,
   FlickDirection,
-  HoldEnd,
-  HoldStart,
-  TapNote,
+  HiSpeedLayer,
+  SolidNote,
   TickType,
-  type HiSpeedLayer,
-  type HoldTick,
   type Note,
 } from '../editor/note'
 import { getRect } from '../editor/noteImage'
@@ -540,18 +537,23 @@ const scaledTimeToY = (scaledTime: number, currentTime: number) => {
 }
 
 // compute interpolated lane/size for a hold start at a given scaled time
-const getHoldLaneSizeAt = (start: HoldStart, currentScaledTime: number) => {
+const getHoldLaneSizeAt = (
+  start: Note & { type: 'HoldStart' },
+  currentScaledTime: number,
+) => {
   // find the segment [from, to] that contains currentScaledTime
-  let from: any = start
-  let to: any = start.nextNode
+  let from: SolidNote & { type: 'HoldStart' | 'HoldTick' } = start
+  let to: SolidNote & { type: 'HoldEnd' | 'HoldTick' } = start.nextNode
 
   // advance to next non-skip node when necessary
-  while (to && to.tickType === TickType.Skip) to = to.nextNode
+  while (to && 'tickType' in to && to.tickType === TickType.Skip)
+    to = to.nextNode
 
-  while (to && currentScaledTime > to.scaledHitTime) {
+  while (to && currentScaledTime > to.scaledHitTime! && 'nextNode' in to) {
     from = to
     to = to.nextNode
-    while (to && to.tickType === TickType.Skip) to = to.nextNode
+    while (to && 'tickType' in to && to.tickType === TickType.Skip)
+      to = to.nextNode
   }
 
   if (!to) {
@@ -581,7 +583,7 @@ const getHoldLaneSizeAt = (start: HoldStart, currentScaledTime: number) => {
   return { lane, size }
 }
 
-const getXBounds = (note: Note, currentTime: number): [number, number] => {
+const getXBounds = (note: SolidNote, currentTime: number): [number, number] => {
   const { lane, size, scaledHitTime: scaledTime } = note
   const timeDiff = currentTime - scaledTime!
   let percentAmong = (playSpeed / 10) * timeDiff + 1
@@ -590,12 +592,12 @@ const getXBounds = (note: Note, currentTime: number): [number, number] => {
     percentAmong = 1
 
     if (note.type === 'HoldStart' || note.type === 'HoldTick') {
-      const n = note as HoldStart | HoldTick
       const percentAcrossHold =
-        (currentTime - scaledTime!) / (n.nextNode.scaledHitTime! - scaledTime!)
+        (currentTime - scaledTime!) /
+        (note.nextNode.scaledHitTime! - scaledTime!)
 
-      const newLane = lane + percentAcrossHold * (n.nextNode.lane - lane)
-      const newSize = size + percentAcrossHold * (n.nextNode.size - size)
+      const newLane = lane + percentAcrossHold * (note.nextNode.lane - lane)
+      const newSize = size + percentAcrossHold * (note.nextNode.size - size)
 
       const centerX = box.x + box.width / 2 + newLane * laneWidthAtJudgement * 4
       const halfWidth = (newSize * laneWidthAtJudgement * 4) / 2
@@ -637,15 +639,8 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
     note.type === 'TimeSignature'
   )
     return
-  if (
-    note.type === 'HoldTick' &&
-    (note as HoldTick).tickType === TickType.Hidden
-  )
-    return
-  if (
-    (note.type === 'HoldStart' || note.type === 'HoldEnd') &&
-    (note as HoldStart | HoldEnd).isHidden
-  )
+  if (note.type === 'HoldTick' && note.tickType === TickType.Hidden) return
+  if ((note.type === 'HoldStart' || note.type === 'HoldEnd') && note.isHidden)
     return
 
   if (note.scaledHitTime === undefined) return
@@ -670,8 +665,7 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
     'nextNode' in note &&
     note.nextNode
   ) {
-    const hs = note as HoldStart
-    const p = getHoldLaneSizeAt(hs, scaledTime)
+    const p = getHoldLaneSizeAt(note, scaledTime)
     drawLane = p.lane
     drawSize = p.size
   }
@@ -771,21 +765,13 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
     note.type === 'HoldEnd' ||
     note.type === 'HoldTick'
   ) {
-    let n: TapNote | HoldEnd
-    if (note.type === 'Tap') n = note as TapNote
-    else n = note as HoldEnd
-
     if (
-      n.isTrace ||
-      ((n as any).type === 'HoldTick' &&
-        (n as any).tickType !== TickType.Hidden)
+      (note.type !== 'HoldTick' && note.isTrace) ||
+      (note.type === 'HoldTick' && note.tickType !== TickType.Hidden)
     ) {
       let traceSpriteName = 'notes_friction_among_'
-      if (n.isGold) traceSpriteName += 'crtcl'
-      else if (
-        !['HoldStart', 'HoldTick'].includes((n as any).type) &&
-        n.flickDir !== FlickDirection.None
-      )
+      if (note.isGold) traceSpriteName += 'crtcl'
+      else if ('flickDir' in note && note.flickDir !== FlickDirection.None)
         traceSpriteName += 'flick'
       else traceSpriteName += 'long'
 
@@ -795,28 +781,20 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
 
       // compute lane/size for trace position. If this is a HoldStart and the
       // hold is active, use interpolated lane so the trace/tick follows the head.
-      let traceLane = n.lane
+      let traceLane = note.lane
       // let traceSize = (n as any).size || 1
       if (
-        (note as any).type === 'HoldStart' &&
-        scaledTime > (note as any).scaledHitTime &&
+        note.type === 'HoldStart' &&
+        scaledTime > note.scaledHitTime &&
         'nextNode' in note &&
-        (note as any).nextNode
+        note.nextNode
       ) {
-        const hs = note as HoldStart
-        const p = getHoldLaneSizeAt(hs, scaledTime)
-        traceLane = p.lane
+        traceLane = getHoldLaneSizeAt(note, scaledTime).lane
         // traceSize = p.size
       }
 
-      if (
-        note.type === 'HoldTick' &&
-        (note as HoldTick).tickType === TickType.Skip
-      ) {
-        traceLane = getHoldLaneSizeAt(
-          (note as HoldTick).holdStart!,
-          note.scaledHitTime,
-        ).lane
+      if (note.type === 'HoldTick' && note.tickType === TickType.Skip) {
+        traceLane = getHoldLaneSizeAt(note.holdStart!, note.scaledHitTime).lane
       }
 
       const tx =
@@ -861,14 +839,11 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
   // draw flick
   if (!['none', 'tick', 'hidden'].includes(noteImageName)) {
     if (note.type === 'Tap' || note.type === 'HoldEnd') {
-      let n: TapNote | HoldEnd
-      if (note.type === 'Tap') n = note as TapNote
-      else n = note as HoldEnd
-      if (n.flickDir !== FlickDirection.None) {
+      if (note.flickDir !== FlickDirection.None) {
         let flickSpriteName = 'notes_flick_arrow_'
-        if (n.isGold) flickSpriteName += 'crtcl_'
+        if (note.isGold) flickSpriteName += 'crtcl_'
         flickSpriteName += '0' + Math.min(6, note.size * 2)
-        if (n.flickDir !== FlickDirection.Default)
+        if (note.flickDir !== FlickDirection.Default)
           flickSpriteName += '_diagonal'
 
         const flickRect = getRect(flickSpriteName)!
@@ -898,7 +873,7 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
         const fx4 = transformX(fx)
         const fy4 = transformY(fy + fh)
 
-        if (n.flickDir === FlickDirection.Right) {
+        if (note.flickDir === FlickDirection.Right) {
           // Flip horizontally for right flick
           drawQuad(
             fx2,
@@ -949,8 +924,8 @@ const applyEasing = (p: number, type: EasingType) => {
 // Uses temporary note + existing getXBounds helper so logic stays centralized.
 const computePoint = (
   t: number,
-  from: HoldStart | HoldTick,
-  to: HoldTick | HoldEnd,
+  from: Note & { type: 'HoldStart' | 'HoldTick' },
+  to: Note & { type: 'HoldEnd' | 'HoldTick' },
   scaledTime: number,
 ) => {
   const scaledA = from.scaledHitTime!
@@ -971,7 +946,7 @@ const computePoint = (
     size: to.size,
     scaledHitTime: to.scaledHitTime,
     type: to.type,
-  } as HoldTick
+  }
 
   const tempNote = {
     lane: laneAt,
@@ -979,23 +954,25 @@ const computePoint = (
     scaledHitTime: scaledAtT,
     type: 'HoldTick' as const,
     nextNode: tempNext,
-  } as HoldTick
+  }
 
-  const [leftX, w] = getXBounds(tempNote as Note, scaledTime)
+  const [leftX, w] = getXBounds(tempNote as any, scaledTime)
   const y = scaledTimeToY(scaledAtT, scaledTime)
 
   return { left: leftX, w, y }
 }
 
-const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
+const drawPreviewHolds = (
+  note: Note & { type: 'HoldStart' | 'HoldTick' },
+  scaledTime: number,
+) => {
   if (gl === null) return
 
   if (
     note.type === 'HoldStart' ||
-    (note.type === 'HoldTick' && (note as HoldTick).tickType !== TickType.Skip)
+    (note.type === 'HoldTick' && note.tickType !== TickType.Skip)
   ) {
-    const n = note as HoldStart | HoldTick
-    let nextNote = n.nextNode
+    let nextNote = note.nextNode
 
     // console.log('hold')
 
@@ -1022,14 +999,14 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
     let currentNodeIndex = 0
     let nextNodeIndex = 0
     let totalHoldTicks = 0
-    if (n.isGuide) {
+    if (note.isGuide) {
       // Use cached references if available, otherwise traverse
       const pN =
         note.holdStart ||
         (() => {
-          let node = note as HoldStart | HoldTick | HoldEnd
+          let node = note
           while (node.type !== 'HoldStart') node = node.prevNode
-          return node as HoldStart
+          return node
         })()
       // const nN =
       //   note.holdEnd ||
@@ -1040,7 +1017,7 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       //   })()
 
       // Count total hold ticks and find current node's index
-      let tempNode = pN as HoldStart | HoldTick | HoldEnd
+      let tempNode: Note & { type: 'HoldStart' | 'HoldTick' | 'HoldEnd' } = pN
       let nodeIndex = 0
       while (tempNode.type !== 'HoldEnd') {
         if (tempNode === note) {
@@ -1052,7 +1029,7 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
         if (tempNode.type === 'HoldTick') {
           totalHoldTicks++
         }
-        tempNode = tempNode.nextNode as HoldStart | HoldTick | HoldEnd
+        tempNode = tempNode.nextNode
         nodeIndex++
       }
       // Check if nextNote is the HoldEnd
@@ -1061,16 +1038,16 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       }
 
       // Parse guide color (hex to RGB)
-      const color = n.isGold ? goldGuideColor : guideColor
+      const color = note.isGold ? goldGuideColor : guideColor
       const hex = color.replace('#', '')
-      r = parseInt(hex.substr(0, 2), 16) / 255
-      g = parseInt(hex.substr(2, 2), 16) / 255
-      b = parseInt(hex.substr(4, 2), 16) / 255
+      r = parseInt(hex.slice(0, 2), 16) / 255
+      g = parseInt(hex.slice(2, 4), 16) / 255
+      b = parseInt(hex.slice(4, 6), 16) / 255
 
       // Alpha will be calculated per-vertex below
       a = 0.8 // This will be overridden by per-vertex alpha
     } else {
-      if (n.isGold) {
+      if (note.isGold) {
         r = 0.98
         g = 1.0
         b = 0.86
@@ -1087,13 +1064,13 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       const t0 = i / subdivisions
       const t1 = (i + 1) / subdivisions
 
-      const p0 = computePoint(t0, n, nextNote as HoldTick | HoldEnd, scaledTime)
-      const p1 = computePoint(t1, n, nextNote as HoldTick | HoldEnd, scaledTime)
+      const p0 = computePoint(t0, note, nextNote, scaledTime)
+      const p1 = computePoint(t1, note, nextNote, scaledTime)
 
       // Calculate per-vertex alpha for guide notes based on hold tick index
       let alpha0 = a
       let alpha1 = a
-      if (n.isGuide) {
+      if (note.isGuide) {
         // Calculate alpha based on node index
         // Formula: alpha = 0.8 - (nodeIndex / (totalHoldTicks + 1)) * 0.6
         const divisor = totalHoldTicks + 1
@@ -1107,7 +1084,7 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
       }
 
       // Draw trapezoid segment with 3D perspective and gradient alpha
-      if (n.isGuide) {
+      if (note.isGuide) {
         drawFilledQuad(
           p0.left,
           p0.y,
@@ -1127,7 +1104,7 @@ const drawPreviewHolds = (note: HoldStart | HoldTick, scaledTime: number) => {
           alpha1,
         )
       } else {
-        const rect = n.isGold
+        const rect = note.isGold
           ? holdNoteRect.long_critical_normal
           : holdNoteRect.long_normal
         drawQuad(
@@ -1157,9 +1134,10 @@ const drawPreview = (timeStamp: number) => {
 
   if (!hasCachedScaledTimes) {
     chartNotes.forEach((note) => {
+      if ('isEvent' in note) return
       note.scaledHitTime = getScaledTime(
         note.beat,
-        (note as TapNote)?.layer || chartLayers[0],
+        note?.layer || chartLayers[0],
       )
     })
     hasCachedScaledTimes = true
@@ -1238,8 +1216,7 @@ const drawPreview = (timeStamp: number) => {
   chartNotes
     .filter((n) => n.type === 'HoldStart' || n.type === 'HoldTick')
     .filter((n) => {
-      const ht = n as HoldTick
-      if (ht.tickType === TickType.Skip) return false
+      if ('tickType' in n && n.tickType === TickType.Skip) return false
       return true
     })
     .filter((n) => {
@@ -1248,23 +1225,18 @@ const drawPreview = (timeStamp: number) => {
       const startTime = n.scaledHitTime || 0
 
       // find end time for this segment (next non-skip node)
-      let endNode: Note = n
-      if ('holdEnd' in endNode) endNode = endNode.holdEnd as Note
+      let endNode: Note & { type: 'HoldEnd' | 'HoldTick' | 'HoldStart' } = n
+      if ('holdEnd' in endNode && endNode.holdEnd) endNode = endNode.holdEnd
       else {
         while ('nextNode' in endNode && endNode.nextNode) {
-          endNode = endNode.nextNode as Note
-          if (
-            'tickType' in endNode &&
-            (endNode as HoldTick).tickType !== TickType.Skip
-          )
-            break
-          ;(n as HoldTick).holdEnd = endNode as HoldEnd
+          endNode = endNode.nextNode
+          if ('tickType' in endNode && endNode.tickType !== TickType.Skip) break
+          if (endNode.type === 'HoldEnd') n.holdEnd = endNode
         }
       }
       const endTime = endNode.scaledHitTime || startTime
 
-      const visibleStart =
-        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0
+      const visibleStart = cursorScaledTimesByLayer.get(n.layer) || 0
       const visibleEnd = visibleStart + horizon
 
       // overlap test
@@ -1272,17 +1244,13 @@ const drawPreview = (timeStamp: number) => {
     })
     .sort(orderHolds)
     .forEach((n) =>
-      drawPreviewHolds(
-        n as HoldStart | HoldTick,
-        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0,
-      ),
+      drawPreviewHolds(n, cursorScaledTimesByLayer.get(n.layer) || 0),
     )
 
   chartNotes
-    .filter((n) => !['HiSpeed', 'TimeSignature', 'BPMChange'].includes(n.type))
     .filter((n) => {
-      const cursorScaledTime =
-        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0
+      if ('isEvent' in n) return false
+      const cursorScaledTime = cursorScaledTimesByLayer.get(n.layer) || 0
 
       // Always draw normal upcoming notes within the horizon
       const withinHorizon =
@@ -1292,9 +1260,9 @@ const drawPreview = (timeStamp: number) => {
       // Special-case: keep HoldStart head drawn at judgement while the hold is active
       if (n.type === 'HoldStart') {
         // find the final HoldEnd node for this hold chain (skip intermediate skip ticks)
-        let endNode: Note = n
+        let endNode: SolidNote = n
         while ('nextNode' in endNode && endNode.nextNode) {
-          endNode = endNode.nextNode as Note
+          endNode = endNode.nextNode
           if (endNode.type === 'HoldEnd') break
         }
         const endTime = endNode.scaledHitTime || n.scaledHitTime!
@@ -1308,11 +1276,14 @@ const drawPreview = (timeStamp: number) => {
 
       return withinHorizon
     })
-    .sort((a, b) => b.scaledHitTime! - a.scaledHitTime!)
+    .sort(
+      (a, b) =>
+        (b as SolidNote).scaledHitTime! - (a as SolidNote).scaledHitTime!,
+    )
     .forEach((n) =>
       drawPreviewNote(
         n,
-        cursorScaledTimesByLayer.get((n as TapNote).layer) || 0,
+        cursorScaledTimesByLayer.get((n as SolidNote).layer) || 0,
         flatTime,
       ),
     )
@@ -1320,33 +1291,42 @@ const drawPreview = (timeStamp: number) => {
   lastTime = timeStamp
 }
 
-const orderHolds = (a: Note, b: Note) => {
-  const timeDiff =
-    getStartTime(a as HoldStart | HoldTick) -
-    getStartTime(b as HoldStart | HoldTick)
+const orderHolds = (a: SolidNote, b: SolidNote) => {
+  if (
+    a.type === 'Tap' ||
+    b.type === 'Tap' ||
+    a.type === 'HoldEnd' ||
+    b.type === 'HoldEnd'
+  )
+    return 0
+  const timeDiff = getStartTime(a) - getStartTime(b)
   if (timeDiff !== 0) return timeDiff
 
-  const goldDiff =
-    (a as HoldStart | HoldTick).isGold === (b as HoldStart | HoldTick).isGold
+  const goldDiff = a.isGold === b.isGold
   if (+goldDiff !== 0) return +goldDiff
 
-  const guideDif =
-    (a as HoldStart | HoldTick).isGuide === (b as HoldStart | HoldTick).isGuide
+  const guideDif = a.isGuide === b.isGuide
   return +guideDif
 }
 
-const getStartTime = (n: HoldStart | HoldTick) => {
+const getStartTime = (n: Note & { type: 'HoldStart' | 'HoldTick' }) => {
   if (!('holdStart' in n) || !n.holdStart) {
     if (n.type === 'HoldStart') {
       n.holdStart = n
     } else {
-      let hs: HoldStart | HoldTick = n
+      let hs: Note & { type: 'HoldStart' | 'HoldTick' } = n
       while ('prevNode' in hs && hs.prevNode) {
         hs = hs.prevNode
-        if (hs.type === 'HoldStart') break
+        if (hs.type === 'HoldStart') {
+          n.holdStart = hs
+          break
+        }
       }
-      n.holdStart = hs as HoldStart
     }
+  }
+
+  if (!('holdStart' in n) || !n.holdStart) {
+    throw new Error('HoldStart not found')
   }
 
   return n.holdStart.scaledHitTime!
