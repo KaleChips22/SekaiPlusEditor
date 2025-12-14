@@ -809,70 +809,18 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
         // traceSize = p.size
       }
 
-      let tx =
-        box.x + traceLane * laneWidthAtJudgement * 4 + box.width / 2 - 0.5 * tw
-
-      // If this is a hold tick that belongs to a traced hold, interpolate
-      // the X position along the hold path using surrounding non-skip nodes.
-      if ((note as any).type === 'HoldTick') {
-        const t = note as any as HoldTick
-
-        // find the root HoldStart for this chain
-        let root: any = t
-        while ('prevNode' in root && root.prevNode) root = root.prevNode
-
-        if (root && root.type === 'HoldStart' && root.isTrace) {
-          // find previous and next non-skip nodes around this tick
-          let pN: HoldTick | HoldStart = t.prevNode
-          let nN: HoldTick | HoldEnd = t.nextNode
-
-          while (pN && 'prevNode' in pN && pN.tickType === TickType.Skip)
-            pN = pN.prevNode
-
-          while (nN && 'nextNode' in nN && nN.tickType === TickType.Skip)
-            nN = nN.nextNode
-
-          if (pN && nN) {
-            const percentY = (t.beat - pN.beat) / (nN.beat - pN.beat)
-            const easedY =
-              pN.easingType === EasingType.EaseIn
-                ? Math.pow(percentY, 2)
-                : pN.easingType === EasingType.EaseOut
-                  ? 1 - Math.pow(1 - percentY, 2)
-                  : percentY
-            tx =
-              box.x +
-              box.width / 2 +
-              ((1 - easedY) * pN.lane + easedY * nN.lane) *
-                2 *
-                laneWidthAtJudgement
-          }
-        } else if (t.tickType === TickType.Skip) {
-          // fallback: original skip handling
-          let pN: HoldTick | HoldStart = t.prevNode
-          let nN: HoldTick | HoldEnd = t.nextNode
-
-          while ('prevNode' in pN && pN.tickType === TickType.Skip)
-            pN = pN.prevNode
-
-          while ('nextNode' in nN && nN.tickType === TickType.Skip)
-            nN = nN.nextNode
-
-          const percentY = (t.beat - pN.beat) / (nN.beat - pN.beat)
-          const easedY =
-            pN.easingType === EasingType.EaseIn
-              ? Math.pow(percentY, 2)
-              : pN.easingType === EasingType.EaseOut
-                ? 1 - Math.pow(1 - percentY, 2)
-                : percentY
-          tx =
-            box.x +
-            box.width / 2 +
-            ((1 - easedY) * pN.lane + easedY * nN.lane) *
-              2 *
-              laneWidthAtJudgement
-        }
+      if (
+        note.type === 'HoldTick' &&
+        (note as HoldTick).tickType === TickType.Skip
+      ) {
+        traceLane = getHoldLaneSizeAt(
+          (note as HoldTick).holdStart!,
+          note.scaledHitTime,
+        ).lane
       }
+
+      const tx =
+        box.x + traceLane * laneWidthAtJudgement * 4 + box.width / 2 - 0.5 * tw
 
       // Draw trace with old perspective system
       const transformX = (px: number) => {
