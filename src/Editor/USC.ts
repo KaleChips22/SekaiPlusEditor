@@ -305,7 +305,7 @@ export const USCToNotes = (data: {
       hiSpeedLayers.push(layer)
       hiSpeedLayerMap.set(i, layer)
 
-      t.changes.forEach((c) => {
+      t.changes.forEach((c: { beat: number; timeScale: number }) => {
         const hiSpeed: Note = {
           type: 'HiSpeed',
           beat: c.beat,
@@ -391,6 +391,7 @@ export const USCToNotes = (data: {
               isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
               isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
               easingType,
+              nextNode: {} as any,
               layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
             }
 
@@ -416,6 +417,7 @@ export const USCToNotes = (data: {
                     : o.critical,
               isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
               isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
+              prevNode: {} as any,
               flickDir,
               layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
             }
@@ -458,6 +460,8 @@ export const USCToNotes = (data: {
               isGuide: o.type === 'guide',
               easingType,
               tickType,
+              nextNode: {} as any,
+              prevNode: {} as any,
               layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
             }
 

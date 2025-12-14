@@ -125,6 +125,14 @@ interface TimeSignature {
   bottom: number
 }
 
+// interface FeverStart {
+//   type: 'FeverStart'
+// }
+
+// interface FeverEnd {
+//   type: 'FeverEnd'
+// }
+
 export interface HiSpeedLayer {
   name: string
 }

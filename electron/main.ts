@@ -227,9 +227,7 @@ app.setName('Sekai Plus Editor')
 ipcMain.handle('show-open-dialog', async () => {
   const result = await dialog.showOpenDialog(win!, {
     properties: ['openFile'],
-    filters: [
-      { name: 'Sekai Plus Editor Files', extensions: ['pjsk', 'usc', 'sus'] },
-    ],
+    filters: [{ name: 'Sekai Plus Editor Files', extensions: ['pjsk', 'sus'] }],
   })
 
   if (!result.canceled && result.filePaths.length > 0) {
@@ -249,7 +247,7 @@ ipcMain.handle('show-open-dialog', async () => {
 ipcMain.handle('show-save-dialog', async (_, defaultPath, content) => {
   const result = await dialog.showSaveDialog(win!, {
     defaultPath: defaultPath || 'Untitled.pjsk',
-    filters: [{ name: 'Sekai Plus Editor Files', extensions: ['pjsk', 'usc'] }],
+    filters: [{ name: 'Sekai Plus Editor Files', extensions: ['pjsk'] }],
   })
 
   if (!result.canceled && result.filePath) {
@@ -287,48 +285,23 @@ ipcMain.handle('show-settings', () => {
   createSettingsWindow()
 })
 
-ipcMain.handle(
-  'export-chart',
-  async (
-    _,
-    uscContent,
-    levelDataContent,
-    susData,
-    canExportSus,
-    defaultName,
-  ) => {
-    const result = await dialog.showSaveDialog(win!, {
-      defaultPath: defaultName || 'Untitled',
-      filters: [
-        { name: 'USC', extensions: ['.usc'] },
-        { name: 'Level Data', extensions: ['.json.gz'] },
-        ...(canExportSus ? [{ name: 'SUS', extensions: ['.sus'] }] : []),
-      ],
-    })
+ipcMain.handle('export-chart', async (_, susData, defaultName) => {
+  const result = await dialog.showSaveDialog(win!, {
+    defaultPath: defaultName || 'Untitled',
+    filters: [{ name: 'SUS', extensions: ['.sus'] }],
+  })
 
-    if (!result.canceled && result.filePath) {
-      try {
-        // Determine which format to export based on file extension
-        const ext = path.extname(result.filePath).toLowerCase()
-        let content: string | Uint8Array<ArrayBuffer>
+  if (!result.canceled && result.filePath) {
+    try {
+      const content = susData
 
-        if (ext === '.usc') {
-          content = uscContent
-        } else if (ext === '.sus') {
-          content = susData
-        } else {
-          // Default to levelData for .json or other extensions
-          content = levelDataContent
-        }
-
-        await fs.writeFile(result.filePath, content as any, 'utf-8')
-        return { success: true, filePath: result.filePath }
-      } catch (error) {
-        console.error('Failed to export chart:', error)
-        dialog.showErrorBox('Error', 'Could not export chart.')
-        return { success: false, error: String(error) }
-      }
+      await fs.writeFile(result.filePath, content, 'utf-8')
+      return { success: true, filePath: result.filePath }
+    } catch (error) {
+      console.error('Failed to export chart:', error)
+      dialog.showErrorBox('Error', 'Could not export chart.')
+      return { success: false, error: String(error) }
     }
-    return { success: false, canceled: true }
-  },
-)
+  }
+  return { success: false, canceled: true }
+})

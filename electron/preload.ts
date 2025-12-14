@@ -34,19 +34,6 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   saveFile: (filePath: string, content: string) =>
     ipcRenderer.invoke('save-file', filePath, content),
   showSettings: () => ipcRenderer.invoke('show-settings'),
-  exportChart: (
-    uscContent: string,
-    levelDataContent: any,
-    susContent: string,
-    canExportSus: boolean,
-    defaultName: string,
-  ) =>
-    ipcRenderer.invoke(
-      'export-chart',
-      uscContent,
-      levelDataContent,
-      susContent,
-      canExportSus,
-      defaultName,
-    ),
+  exportChart: (susContent: string, defaultName: string) =>
+    ipcRenderer.invoke('export-chart', susContent, defaultName),
 })

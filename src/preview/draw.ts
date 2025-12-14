@@ -1,5 +1,4 @@
 import {
-  chartLayers,
   chartNotes,
   cursorPos,
   getBPM,
@@ -16,7 +15,6 @@ import {
 import {
   EasingType,
   FlickDirection,
-  HiSpeedLayer,
   SolidNote,
   TickType,
   type Note,
@@ -1135,23 +1133,14 @@ const drawPreview = (timeStamp: number) => {
   if (!hasCachedScaledTimes) {
     chartNotes.forEach((note) => {
       if ('isEvent' in note) return
-      note.scaledHitTime = getScaledTime(
-        note.beat,
-        note?.layer || chartLayers[0],
-      )
+      note.scaledHitTime = getScaledTime(note.beat)
     })
     hasCachedScaledTimes = true
   }
 
-  // Pre-calculate scaled times for cursor position for each layer
-  const cursorScaledTimesByLayer = new Map<HiSpeedLayer, number>()
-  chartLayers.forEach((layer) => {
-    cursorScaledTimesByLayer.set(layer, getScaledTime(cursorPos, layer))
-  })
-
   // const bpm = getBPM(cursorPos)
   const flatTime = getTime(cursorPos)
-  // const scaledTime = getScaledTime(cursorPos)
+  const scaledTime = getScaledTime(cursorPos)
   // const tSig = getTsig(cursorPos)
   // const hiSpeed = getHiSpeed(cursorPos)
 
@@ -1236,26 +1225,23 @@ const drawPreview = (timeStamp: number) => {
       }
       const endTime = endNode.scaledHitTime || startTime
 
-      const visibleStart = cursorScaledTimesByLayer.get(n.layer) || 0
+      const visibleStart = scaledTime
       const visibleEnd = visibleStart + horizon
 
       // overlap test
       return endTime >= visibleStart && startTime <= visibleEnd
     })
     .sort(orderHolds)
-    .forEach((n) =>
-      drawPreviewHolds(n, cursorScaledTimesByLayer.get(n.layer) || 0),
-    )
+    .forEach((n) => drawPreviewHolds(n, scaledTime))
 
   chartNotes
     .filter((n) => {
       if ('isEvent' in n) return false
-      const cursorScaledTime = cursorScaledTimesByLayer.get(n.layer) || 0
 
       // Always draw normal upcoming notes within the horizon
       const withinHorizon =
-        cursorScaledTime <= n.scaledHitTime! &&
-        n.scaledHitTime! - cursorScaledTime <= 10 / playSpeed
+        scaledTime <= n.scaledHitTime! &&
+        n.scaledHitTime! - scaledTime <= 10 / playSpeed
 
       // Special-case: keep HoldStart head drawn at judgement while the hold is active
       if (n.type === 'HoldStart') {
@@ -1269,7 +1255,7 @@ const drawPreview = (timeStamp: number) => {
 
         // if the hold has started but not yet ended, keep its head visible
         const holdActive =
-          cursorScaledTime > n.scaledHitTime! && cursorScaledTime <= endTime!
+          scaledTime > n.scaledHitTime! && scaledTime <= endTime!
 
         return withinHorizon || holdActive
       }
@@ -1280,13 +1266,7 @@ const drawPreview = (timeStamp: number) => {
       (a, b) =>
         (b as SolidNote).scaledHitTime! - (a as SolidNote).scaledHitTime!,
     )
-    .forEach((n) =>
-      drawPreviewNote(
-        n,
-        cursorScaledTimesByLayer.get((n as SolidNote).layer) || 0,
-        flatTime,
-      ),
-    )
+    .forEach((n) => drawPreviewNote(n, scaledTime, flatTime))
 
   lastTime = timeStamp
 }

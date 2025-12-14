@@ -29,10 +29,7 @@ interface Window {
     saveFile: (filePath: string, content: string) => any
     showSettings: () => void
     exportChart: (
-      uscContent: string,
-      levelDataContent: any,
       susData: string,
-      canExportSus: boolean,
       defaultName: string,
     ) => Promise<{
       success: boolean
