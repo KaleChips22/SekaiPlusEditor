@@ -1773,7 +1773,7 @@ const drawNote = (n: Note) => {
   if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
     ctx.globalAlpha *= 0.5
 
-  const { lane, beat, size } = n
+  const { beat } = n
 
   if (n.type === 'HiSpeed') {
     const y = beatToY(beat)
@@ -1884,6 +1884,8 @@ const drawNote = (n: Note) => {
 
     return
   }
+
+  const { lane, size } = n
 
   let aspectRatio = 4
 
@@ -2520,7 +2522,10 @@ const draw = (timeStamp: number) => {
       if (
         dragMode === DragMode.Move &&
         chartNotes.filter(
-          (n, i) => selectedIndeces.has(i) && n.lane - n.size / 2 <= -2.75,
+          (n, i) =>
+            selectedIndeces.has(i) &&
+            'lane' in n &&
+            n.lane - n.size / 2 <= -2.75,
         ).length === 0
       )
         chartNotes
@@ -2661,7 +2666,7 @@ const draw = (timeStamp: number) => {
       const groupLeft = Math.min(
         ...clipboard.map((n) => {
           if ('lane' in n) {
-            return n.lane - ((n as Note).size ?? 1) / 2
+            return n.lane - (n.size ?? 1) / 2
           }
           return 0
         }),
@@ -2669,7 +2674,7 @@ const draw = (timeStamp: number) => {
       const groupRight = Math.max(
         ...clipboard.map((n) => {
           if ('lane' in n) {
-            return n.lane + ((n as Note).size ?? 1) / 2
+            return n.lane + (n.size ?? 1) / 2
           }
           return 0
         }),
@@ -3368,7 +3373,7 @@ const draw = (timeStamp: number) => {
         !notesToRender.includes(nextN)
       )
     })
-    .forEach((n) => drawHoldLine(n))
+    .forEach((n) => drawHoldLine(n as any))
 
   notesToRender.forEach((n) => {
     if (n.type === 'HoldTick' && n.tickType === TickType.Skip) return
@@ -3435,13 +3440,13 @@ const draw = (timeStamp: number) => {
         // position the group such that the mouse sits at the group's center
         const groupLeft = Math.min(
           ...clipboard.map((n) => {
-            if ('lane' in n) return n.lane - ((n as Note).size ?? 1) / 2
+            if ('lane' in n) return n.lane - (n.size ?? 1) / 2
             return 0
           }),
         )
         const groupRight = Math.max(
           ...clipboard.map((n) => {
-            if ('lane' in n) return n.lane + ((n as Note).size ?? 1) / 2
+            if ('lane' in n) return n.lane + (n.size ?? 1) / 2
             return 0
           }),
         )
