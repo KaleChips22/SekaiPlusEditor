@@ -7,11 +7,11 @@ import {
   setSelectedLayerIndex,
   setChartMetadata,
   resetChartMetadata,
+  chartLayers,
 } from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
 import { susToUSC } from './SUStoUSC'
-import { BPMChange, HiSpeed, TimeSignature } from './note'
 // import { uscToLevelData } from './USCtoLevelData'
 
 let currentFilePath: string | null = null
@@ -40,12 +40,11 @@ export const openFile = () => {
 
         notes.push({
           beat: 0,
-          lane: 0,
-          size: 0,
           type: 'TimeSignature',
           bottom: 4,
           top: 4,
-        } as TimeSignature)
+          isEvent: true,
+        })
 
         setMusicOffset(offset)
         setChartNotes(notes)
@@ -109,34 +108,32 @@ export const newFile = () => {
 
   setIsExtendedChart(true)
 
-  setChartNotes([
-    {
-      beat: 0,
-      lane: 0,
-      size: 0,
-      type: 'HiSpeed',
-      speed: 1,
-    } as HiSpeed,
-    {
-      beat: 0,
-      lane: 0,
-      size: 0,
-      type: 'TimeSignature',
-      bottom: 4,
-      top: 4,
-    } as TimeSignature,
-    {
-      beat: 0,
-      lane: 0,
-      size: 0,
-      type: 'BPMChange',
-      BPM: 160,
-    } as BPMChange,
-  ])
-
   setChartLayers([
     {
       name: 'default',
+    },
+  ])
+
+  setChartNotes([
+    {
+      beat: 0,
+      type: 'HiSpeed',
+      speed: 1,
+      layer: chartLayers[0],
+      isEvent: true,
+    },
+    {
+      beat: 0,
+      type: 'TimeSignature',
+      bottom: 4,
+      top: 4,
+      isEvent: true,
+    },
+    {
+      beat: 0,
+      type: 'BPMChange',
+      BPM: 160,
+      isEvent: true,
     },
   ])
 

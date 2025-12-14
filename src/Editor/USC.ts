@@ -1,14 +1,8 @@
 import {
-  BPMChange,
   EasingType,
   FlickDirection,
-  HiSpeed,
   HiSpeedLayer,
-  HoldEnd,
-  HoldStart,
-  HoldTick,
   Note,
-  TapNote,
   TickType,
 } from './note'
 
@@ -28,15 +22,15 @@ export const notesToUSC = (
   layers.forEach((l, i) => {
     const uscLayer = {
       type: 'timeScaleGroup',
-      changes: [],
+      changes: [] as any[],
     }
 
     layersMap.set(l, i)
 
     notes
-      .filter((n) => n.type === 'HiSpeed' && (n as HiSpeed).layer === l)
+      .filter((n) => n.type === 'HiSpeed' && n.layer === l)
       .forEach((n) => {
-        const hiSpeed = n as HiSpeed
+        const hiSpeed = n as Note & { type: 'HiSpeed' }
 
         uscLayer.changes.push({
           beat: hiSpeed.beat,
@@ -51,41 +45,35 @@ export const notesToUSC = (
 
   notes.forEach((note) => {
     if (note.type === 'Tap') {
-      const n = note as TapNote
-
       usc.objects.push({
-        beat: n.beat,
-        critical: n.isGold,
-        lane: n.lane * 2,
-        size: n.size,
-        timeScaleGroup: layersMap.get(n.layer) || 0,
-        trace: n.isTrace,
+        beat: note.beat,
+        critical: note.isGold,
+        lane: note.lane * 2,
+        size: note.size,
+        timeScaleGroup: layersMap.get(note.layer) || 0,
+        trace: note.isTrace,
         type: 'single',
-        ...(n.flickDir !== FlickDirection.None
+        ...(note.flickDir !== FlickDirection.None
           ? {
               direction:
-                n.flickDir === FlickDirection.Default
+                note.flickDir === FlickDirection.Default
                   ? 'up'
-                  : n.flickDir === FlickDirection.Left
+                  : note.flickDir === FlickDirection.Left
                     ? 'left'
                     : 'right',
             }
           : {}),
       })
     } else if (note.type === 'BPMChange') {
-      const n = note as BPMChange
-
       usc.objects.push({
         type: 'bpm',
-        beat: n.beat,
-        bpm: n.BPM,
+        beat: note.beat,
+        bpm: note.BPM,
       })
     } else if (note.type === 'HoldStart') {
-      const hs = note as HoldStart
-
       const connections: any[] = []
 
-      let n: HoldStart | HoldTick | HoldEnd = hs
+      let n = note as Note & { type: 'HoldStart' | 'HoldEnd' | 'HoldTick' }
       while ('nextNode' in n) {
         let ease = 'linear'
         switch (n.easingType) {
@@ -108,13 +96,13 @@ export const notesToUSC = (
         }
 
         connections.push({
-          ...(hs.isGuide
+          ...(note.isGuide
             ? {}
             : {
                 type:
                   n.type === 'HoldStart'
                     ? 'start'
-                    : n.tickType === TickType.Skip
+                    : 'tickType' in n && n.tickType === TickType.Skip
                       ? 'attach'
                       : 'tick',
               }),
@@ -123,7 +111,8 @@ export const notesToUSC = (
           lane: n.lane * 2,
           size: n.size,
           timeScaleGroup: layersMap.get(n.layer),
-          ...(n.type === 'HoldStart' || n.tickType !== TickType.Hidden
+          ...(n.type === 'HoldStart' ||
+          ('tickType' in n && n.tickType !== TickType.Hidden)
             ? { critical: n.isGold }
             : {}),
           ...(n.type === 'HoldStart'
@@ -202,8 +191,6 @@ export const notesToUSC = (
         n = n.nextNode
       }
 
-      n = n as HoldEnd
-
       connections.push({
         type: 'end',
         beat: n.beat,
@@ -280,15 +267,15 @@ export const notesToUSC = (
       // )
 
       usc.objects.push({
-        type: hs.isGuide ? 'guide' : 'slide',
-        ...(hs.isGuide
+        type: note.isGuide ? 'guide' : 'slide',
+        ...(note.isGuide
           ? {
-              color: hs.isGold ? 'yellow' : 'green',
+              color: note.isGold ? 'yellow' : 'green',
             }
           : {
-              critical: hs.isGold,
+              critical: note.isGold,
             }),
-        [hs.isGuide ? 'midpoints' : 'connections']: connections,
+        [note.isGuide ? 'midpoints' : 'connections']: connections,
       })
     }
   })
@@ -319,13 +306,12 @@ export const USCToNotes = (data: {
       hiSpeedLayerMap.set(i, layer)
 
       t.changes.forEach((c) => {
-        const hiSpeed: HiSpeed = {
+        const hiSpeed: Note = {
           type: 'HiSpeed',
           beat: c.beat,
-          lane: 0,
-          size: 0,
           speed: c.timeScale,
           layer,
+          isEvent: true,
         }
 
         notes.push(hiSpeed)
@@ -344,7 +330,7 @@ export const USCToNotes = (data: {
           else if (o.direction === 'right') flickDir = FlickDirection.Right
           else if (o.direction === 'up') flickDir = FlickDirection.Default
         }
-        const n = {
+        const n: Note = {
           type: 'Tap',
           beat: o.beat,
           isGold: o.critical,
@@ -352,18 +338,17 @@ export const USCToNotes = (data: {
           size: o.size,
           isTrace: o.trace,
           flickDir,
-          layer: hiSpeedLayerMap.get(o.timeScaleGroup),
-        } as TapNote
+          layer: hiSpeedLayerMap.get(o.timeScaleGroup)!,
+        }
 
         notes.push(n)
       } else if (o.type === 'bpm') {
-        const n = {
+        const n: Note = {
           type: 'BPMChange',
           beat: o.beat,
           BPM: o.bpm,
-          lane: 0,
-          size: 0,
-        } as BPMChange
+          isEvent: true,
+        }
 
         notes.push(n)
       } else if (o.type === 'slide' || o.type === 'guide') {
@@ -396,7 +381,7 @@ export const USCToNotes = (data: {
                 break
             }
 
-            const n = {
+            const n: Note = {
               type: 'HoldStart',
               size: c.size,
               lane: c.lane / 2,
@@ -406,8 +391,8 @@ export const USCToNotes = (data: {
               isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
               isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
               easingType,
-              layer: hiSpeedLayerMap.get(c.timeScaleGroup),
-            } as HoldStart
+              layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
+            }
 
             holdNotes.push(n)
           } else if (i === connections.length - 1) {
@@ -418,7 +403,7 @@ export const USCToNotes = (data: {
               else if (c.direction === 'up') flickDir = FlickDirection.Default
             }
 
-            const n = {
+            const n: Note = {
               type: 'HoldEnd',
               size: c.size,
               lane: c.lane / 2,
@@ -432,11 +417,11 @@ export const USCToNotes = (data: {
               isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
               isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
               flickDir,
-              layer: hiSpeedLayerMap.get(c.timeScaleGroup),
-            } as HoldEnd
+              layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
+            }
 
-            n.prevNode = holdNotes[i - 1] as HoldStart | HoldTick
-            n.prevNode.nextNode = n
+            ;(n as any).prevNode = holdNotes[i - 1]
+            ;(n as any).prevNode.nextNode = n
 
             holdNotes.push(n)
           } else {
@@ -464,7 +449,7 @@ export const USCToNotes = (data: {
             if (c.type === 'attach') tickType = TickType.Skip
             else if ('critical' in c) tickType = TickType.Normal
 
-            const n = {
+            const n: Note = {
               type: 'HoldTick',
               size: c.size,
               lane: c.lane / 2,
@@ -473,11 +458,11 @@ export const USCToNotes = (data: {
               isGuide: o.type === 'guide',
               easingType,
               tickType,
-              layer: hiSpeedLayerMap.get(c.timeScaleGroup),
-            } as HoldTick
+              layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
+            }
 
-            n.prevNode = holdNotes[i - 1] as HoldStart | HoldTick
-            n.prevNode.nextNode = n
+            ;(n as any).prevNode = holdNotes[i - 1]
+            ;(n as any).prevNode.nextNode = n
 
             holdNotes.push(n)
           }
