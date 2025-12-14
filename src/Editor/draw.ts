@@ -3,7 +3,6 @@ import { saveFile, saveFileAs } from './fileOps'
 import {
   EasingType,
   FlickDirection,
-  HiSpeedLayer,
   SolidEvent,
   SolidNote,
   TickType,
@@ -13,7 +12,6 @@ import { getRect } from './noteImage'
 import { notesToPJSK } from './PJSK'
 import { notesToUSC } from './USC'
 import { historyManager } from './history'
-import { USCtoLevelData } from './USCtoLevelData'
 import {
   disableCachedScaledTimes,
   hasCachedScaledTimes,
@@ -319,54 +317,12 @@ export const setMusic = (file: File) => {
 const imageSource = document.createElement('img')
 imageSource.src = 'editor_sprites/notes.png'
 
-export let chartLayers: HiSpeedLayer[] = [
-  {
-    name: 'default',
-  },
-]
-export const addChartLayer = (name: string) => {
-  if (!isExtendedChart) return
-  const newLayer: HiSpeedLayer = { name }
-  chartLayers.push(newLayer)
-  chartNotes.push({
-    isEvent: true,
-    type: 'HiSpeed',
-    beat: 0,
-    speed: 1,
-    layer: newLayer,
-  })
-
-  updateOffsetCache()
-}
-export const setChartLayers = (layers: HiSpeedLayer[]) => {
-  chartLayers = layers
-}
-export const removeChartLayer = (layer: HiSpeedLayer) => {
-  if (!isExtendedChart) return
-  if (chartLayers.length === 1) return
-  const index = chartLayers.findIndex((l) => l === layer)
-  if (index === -1) return
-
-  chartNotes.map((note) => {
-    if ('layer' in note && note.layer === layer) {
-      note.layer = chartLayers[0]
-    }
-  })
-  chartLayers.splice(index, 1)
-}
-export let selectedLayerIndex = 0
-export const setSelectedLayerIndex = (index: number) => {
-  if (!isExtendedChart) selectedLayerIndex = 0
-  else selectedLayerIndex = index
-}
-
 export const chartNotes: Note[] = [
   {
     isEvent: true,
     type: 'HiSpeed',
     beat: 0,
     speed: 1,
-    layer: chartLayers[0],
   },
   {
     isEvent: true,
@@ -586,43 +542,17 @@ export const clearHistory = () => {
 }
 
 export const exportUSC = async () => {
-  const uscFile = notesToUSC(chartLayers, chartNotes, musicOffsetMs)
-  const uscContent = JSON.stringify(uscFile)
-  const levelData = JSON.stringify(USCtoLevelData(uscFile.usc))
-  let susData = ''
-  const canExportSus = !isExtendedChart
-  if (canExportSus) {
-    susData = USCtoSUS(uscFile.usc, {
-      title: '',
-      artist: '',
-      designer: '',
-      waveoffset: 0,
-    })
-  }
-  // const levelData = JSON.stringify(uscToLevelData(uscFile.usc))
-
-  const textEncoder = new TextEncoder()
-  const encodedLevelData = textEncoder.encode(levelData)
-
-  const readableStream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(encodedLevelData)
-      controller.close()
-    },
+  const uscFile = notesToUSC(chartNotes, musicOffsetMs)
+  const susData = USCtoSUS(uscFile.usc, {
+    title: '',
+    artist: '',
+    designer: '',
+    waveoffset: 0,
   })
-
-  const compressedLevelData = readableStream.pipeThrough(
-    new CompressionStream('gzip'),
-  )
-
-  const compressedBytes = await new Response(compressedLevelData).bytes()
   // const levelDataArrayBuffer = await compressedBlob.arrayBuffer()
 
   const result = await window.ipcRenderer.exportChart(
-    uscContent,
-    compressedBytes,
     susData,
-    canExportSus,
     musicScoreName || 'Untitled',
   )
 
@@ -633,7 +563,6 @@ export const exportUSC = async () => {
 
 export const saveAsPJSK = () => {
   const pjsk = notesToPJSK(
-    chartLayers,
     chartNotes,
     musicOffsetMs,
     isExtendedChart,
@@ -646,7 +575,6 @@ export const saveAsPJSK = () => {
 
 export const savePJSK = () => {
   const pjsk = notesToPJSK(
-    chartLayers,
     chartNotes,
     musicOffsetMs,
     isExtendedChart,
@@ -746,11 +674,7 @@ export const selectAll = () => {
 
   for (let i = 0; i < chartNotes.length; i++) {
     const n = chartNotes[i]
-    if (!('isEvent' in n)) {
-      if (n.layer !== chartLayers[selectedLayerIndex]) continue
-
-      selectedIndeces.add(i)
-    }
+    if (!('isEvent' in n)) selectedIndeces.add(i)
   }
 }
 
@@ -930,7 +854,6 @@ export const copy = () => {
         isGold: n.isGold,
         isTrace: n.isTrace,
         flickDir: n.flickDir,
-        layer: chartLayers[selectedLayerIndex],
       }
     } else if (n.type === 'HoldStart') {
       c = {
@@ -943,7 +866,6 @@ export const copy = () => {
         isHidden: n.isHidden,
         isGuide: n.isGuide,
         easingType: n.easingType,
-        layer: chartLayers[selectedLayerIndex],
         // placeholders; will rewire after all clones are created
         nextNode: {} as any,
       }
@@ -957,7 +879,6 @@ export const copy = () => {
         isGuide: n.isGuide,
         tickType: n.tickType,
         easingType: n.easingType,
-        layer: chartLayers[selectedLayerIndex],
         nextNode: {} as any,
         prevNode: {} as any,
       }
@@ -971,7 +892,6 @@ export const copy = () => {
         isTrace: n.isTrace,
         isHidden: n.isHidden,
         flickDir: n.flickDir,
-        layer: chartLayers[selectedLayerIndex],
         prevNode: {} as any,
       }
     } else if (n.type === 'BPMChange') {
@@ -987,7 +907,6 @@ export const copy = () => {
         beat: n.beat,
         speed: n.speed,
         isEvent: true,
-        layer: chartLayers[selectedLayerIndex],
       }
     } else if (n.type === 'TimeSignature') {
       c = {
@@ -1290,7 +1209,7 @@ export const getTime = (beat: number) => {
   return time
 }
 
-export const getScaledTime = (beat: number, layer: HiSpeedLayer) => {
+export const getScaledTime = (beat: number) => {
   let time = 0
   let currentBeat = 0
   let speed = 1
@@ -1299,10 +1218,7 @@ export const getScaledTime = (beat: number, layer: HiSpeedLayer) => {
   // Get all BPM and HiSpeed changes up to the target beat, sorted by beat
   const changes = chartNotes
     .filter(
-      (n) =>
-        (n.type === 'BPMChange' ||
-          (n.type === 'HiSpeed' && n.layer === layer)) &&
-        n.beat <= beat,
+      (n) => (n.type === 'BPMChange' || n.type === 'HiSpeed') && n.beat <= beat,
     )
     .sort((a, b) => a.beat - b.beat) as (Note & {
     type: 'BPMChange' | 'HiSpeed'
@@ -1770,9 +1686,6 @@ export const getNoteImageName = (n: Note): string => {
 const drawNote = (n: Note) => {
   if (ctx === null) return
 
-  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-    ctx.globalAlpha *= 0.5
-
   const { beat } = n
 
   if (n.type === 'HiSpeed') {
@@ -1807,9 +1720,6 @@ const drawNote = (n: Note) => {
     ctx.textBaseline = 'bottom'
     ctx.fillText(`${n.speed}x`, lanesEdge + startX + 8, y - 8)
 
-    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-      ctx.globalAlpha *= 2
-
     return
   } else if (n.type === 'TimeSignature') {
     const y = beatToY(beat)
@@ -1842,9 +1752,6 @@ const drawNote = (n: Note) => {
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
     ctx.fillText(`${n.top}/${n.bottom}`, lanesEdge + startX + 8, y - 8)
-
-    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-      ctx.globalAlpha *= 2
 
     return
   } else if (n.type === 'BPMChange') {
@@ -1879,9 +1786,6 @@ const drawNote = (n: Note) => {
     ctx.textBaseline = 'bottom'
     ctx.fillText(n.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
 
-    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-      ctx.globalAlpha *= 2
-
     return
   }
 
@@ -1907,9 +1811,6 @@ const drawNote = (n: Note) => {
   } else {
     const noteImageName = getNoteImageName(n)
     if (noteImageName === 'none') {
-      if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-        ctx.globalAlpha *= 2
-
       return
     } else if (noteImageName === 'hidden') {
       ctx.beginPath()
@@ -1921,8 +1822,6 @@ const drawNote = (n: Note) => {
       ctx.lineWidth = 3
       ctx.fill()
       ctx.stroke()
-      if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-        ctx.globalAlpha *= 2
 
       return
     }
@@ -2040,16 +1939,10 @@ const drawNote = (n: Note) => {
       )
     }
   }
-
-  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-    ctx.globalAlpha *= 2
 }
 
 const drawFlickArrow = (n: SolidNote) => {
   if (ctx === null) return
-
-  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-    ctx.globalAlpha *= 0.5
 
   const { lane, beat } = n
 
@@ -2057,9 +1950,6 @@ const drawFlickArrow = (n: SolidNote) => {
 
   const rect = getRect(noteImageName)!
   if (['none', 'tick', 'hidden'].includes(noteImageName)) {
-    if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-      ctx.globalAlpha *= 2
-
     return
   }
 
@@ -2102,9 +1992,6 @@ const drawFlickArrow = (n: SolidNote) => {
       if (n.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
     }
   }
-
-  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-    ctx.globalAlpha *= 2
 }
 
 const drawSelectionOutline = (n: SolidNote) => {
@@ -2133,9 +2020,6 @@ const drawHoldLine = (n: Note & { type: 'HoldStart' | 'HoldTick' }) => {
 
   if (n.type === 'HoldTick' && n.tickType === TickType.Skip) return
 
-  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-    ctx.globalAlpha *= 0.5
-
   while ('nextNode' in nextNote && nextNote.tickType === TickType.Skip) {
     nextNote = nextNote.nextNode
   }
@@ -2160,66 +2044,14 @@ const drawHoldLine = (n: Note & { type: 'HoldStart' | 'HoldTick' }) => {
     )
   else if (n.easingType === EasingType.EaseOut)
     ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
-  else if (n.easingType === EasingType.EaseInOut) {
-    ctx.quadraticCurveTo(
-      startX + startW,
-      (startY + (startY + endY) / 2) / 2,
-      (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      endX + endW,
-      ((startY + endY) / 2 + endY) / 2,
-      endX + endW,
-      endY,
-    )
-  } else if (n.easingType === EasingType.EaseOutIn) {
-    ctx.quadraticCurveTo(
-      (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + (startY + endY) / 2) / 2,
-      (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      (startX + endX) / 2 + (startW + endW) / 2,
-      ((startY + endY) / 2 + endY) / 2,
-      endX + endW,
-      endY,
-    )
-  } else ctx.lineTo(endX + endW, endY)
+  else ctx.lineTo(endX + endW, endY)
 
   ctx.lineTo(endX, endY)
   if (n.easingType === EasingType.EaseIn)
     ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
   else if (n.easingType === EasingType.EaseOut)
     ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
-  else if (n.easingType === EasingType.EaseInOut) {
-    ctx.quadraticCurveTo(
-      endX,
-      ((startY + endY) / 2 + endY) / 2,
-      (startX + endX) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      startX,
-      (startY + (endY + startY) / 2) / 2,
-      startX,
-      startY,
-    )
-  } else if (n.easingType === EasingType.EaseOutIn) {
-    ctx.quadraticCurveTo(
-      (startX + endX) / 2,
-      ((startY + endY) / 2 + endY) / 2,
-      (startX + endX) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      (endX + startX) / 2,
-      (startY + (endY + startY) / 2) / 2,
-      startX,
-      startY,
-    )
-  } else ctx.lineTo(startX, startY)
+  else ctx.lineTo(startX, startY)
 
   if (n.isGuide) {
     // Use cached references if available, otherwise traverse
@@ -2254,9 +2086,6 @@ const drawHoldLine = (n: Note & { type: 'HoldStart' | 'HoldTick' }) => {
     else ctx.fillStyle = '#7fffd3aa'
   }
   ctx.fill()
-
-  if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex])
-    ctx.globalAlpha *= 2
 }
 
 const TICKS_PER_BEAT = 480
@@ -2317,7 +2146,6 @@ export const splitHold = () => {
   newStart.beat = note.beat
   newStart.lane = note.lane
   newStart.size = note.size
-  newStart.layer = note.layer
   newStart.easingType = note.easingType
   newStart.nextNode = afterNotes.sort((a, b) => a.beat - b.beat)[0]
   newStart.nextNode.prevNode = newStart
@@ -2327,7 +2155,6 @@ export const splitHold = () => {
   newEnd.beat = note.beat
   newEnd.lane = note.lane
   newEnd.size = note.size
-  newEnd.layer = note.layer
   newEnd.prevNode = beforeNotes.sort((a, b) => b.beat - a.beat)[0]
   newEnd.prevNode.nextNode = newEnd
 
@@ -2367,7 +2194,6 @@ export const connectHolds = () => {
     isGold: start.isGold,
     isGuide: start.isGuide,
     nextNode: start.nextNode,
-    layer: start.layer,
     type: 'HoldTick',
     tickType: TickType.Normal,
   }
@@ -2380,7 +2206,6 @@ export const connectHolds = () => {
     isGold: end.isGold,
     prevNode: end.prevNode,
     nextNode: newStartTick,
-    layer: end.layer,
     type: 'HoldTick',
     tickType: TickType.Normal,
   }
@@ -2476,7 +2301,6 @@ export const repeatHoldMids = () => {
         prevNode: prev,
         tickType:
           'tickType' in currentRep ? currentRep.tickType : TickType.Normal,
-        layer: currentRep.layer,
       }
 
       prev.nextNode = nextMid
@@ -2778,9 +2602,6 @@ const draw = (timeStamp: number) => {
     // Filter notes by pixel distance (max 20px in y-direction) and x-position within note bounds
     const candidateNotes = chartNotes
       .map((n, index) => {
-        if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex]) {
-          return null
-        }
         if ('isEvent' in n) {
           const o = width / 2 + laneWidth * 6 + getEventOffset(n as SolidEvent)
           const s = getEventSize(n as SolidEvent)
@@ -2904,10 +2725,6 @@ const draw = (timeStamp: number) => {
               note.easingType = EasingType.EaseIn
             else if (note.easingType === EasingType.EaseIn)
               note.easingType = EasingType.EaseOut
-            else if (note.easingType === EasingType.EaseOut)
-              note.easingType = EasingType.EaseInOut
-            else if (note.easingType === EasingType.EaseInOut)
-              note.easingType = EasingType.EaseOutIn
             else note.easingType = EasingType.Linear
           } else if (globalState.selectedTool === 3) {
             const note = chartNotes[i]
@@ -3033,7 +2850,6 @@ const draw = (timeStamp: number) => {
               beat: nearestBeat,
               type: 'HiSpeed',
               speed: 1,
-              layer: chartLayers[selectedLayerIndex],
               isEvent: true,
             }
 
@@ -3054,7 +2870,6 @@ const draw = (timeStamp: number) => {
             isGold: false,
             isTrace: false,
             easingType: EasingType.Linear,
-            layer: chartLayers[selectedLayerIndex],
             isGuide: globalState.selectedTool === 7,
             isHidden: globalState.selectedTool === 7,
           } as Note
@@ -3068,7 +2883,6 @@ const draw = (timeStamp: number) => {
             isGold: false,
             isTrace: false,
             flickDir: FlickDirection.None,
-            layer: chartLayers[selectedLayerIndex],
             isHidden: globalState.selectedTool === 7,
             prevNode: newStartNote,
           } as Note
@@ -3139,7 +2953,6 @@ const draw = (timeStamp: number) => {
                 ? TickType.Hidden
                 : nextNoteOptions.tickType,
               easingType: EasingType.Linear,
-              layer: chartLayers[selectedLayerIndex],
               nextNode: end,
               prevNode: base,
             }
@@ -3165,7 +2978,6 @@ const draw = (timeStamp: number) => {
               globalState.selectedTool === 4
                 ? nextNoteOptions.flickDir
                 : FlickDirection.None,
-            layer: chartLayers[selectedLayerIndex],
           }
 
           chartNotes.push(newNote)
@@ -3198,9 +3010,6 @@ const draw = (timeStamp: number) => {
 
       chartNotes
         .filter((n) => {
-          if ('layer' in n && n.layer !== chartLayers[selectedLayerIndex]) {
-            return false
-          }
           if ('isEvent' in n) {
             const o =
               width / 2 + laneWidth * 6 + getEventOffset(n as SolidEvent)
@@ -3535,7 +3344,6 @@ const draw = (timeStamp: number) => {
             easingType: EasingType.Linear,
             isHidden: globalState.selectedTool === 7,
             isGuide: globalState.selectedTool === 7,
-            layer: chartLayers[selectedLayerIndex],
             nextNode: {} as any,
           }
         else if (globalState.selectedTool === 3)
@@ -3550,7 +3358,6 @@ const draw = (timeStamp: number) => {
             easingType: EasingType.Linear,
             nextNode: {} as any,
             prevNode: {} as any,
-            layer: chartLayers[selectedLayerIndex],
           }
         else
           newNote = {
@@ -3560,7 +3367,6 @@ const draw = (timeStamp: number) => {
             size: nextNoteOptions.size,
             isGold: globalState.selectedTool === 5,
             isTrace: globalState.selectedTool === 6,
-            layer: chartLayers[selectedLayerIndex],
             flickDir:
               globalState.selectedTool === 4
                 ? nextNoteOptions.flickDir

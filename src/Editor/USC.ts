@@ -1,47 +1,30 @@
-import {
-  EasingType,
-  FlickDirection,
-  HiSpeedLayer,
-  Note,
-  TickType,
-} from './note'
+import { EasingType, FlickDirection, Note, TickType } from './note'
 
-export const notesToUSC = (
-  layers: HiSpeedLayer[],
-  notes: Note[],
-  offset: number,
-) => {
+export const notesToUSC = (notes: Note[], offset: number) => {
   const usc = {
     objects: [] as any[],
     offset,
   }
 
   const hiSpeedChanges: any[] = []
-  const layersMap = new Map<HiSpeedLayer, number>()
 
-  layers.forEach((l, i) => {
-    const uscLayer = {
-      type: 'timeScaleGroup',
-      changes: [] as any[],
-    }
+  const uscLayer = {
+    type: 'timeScaleGroup',
+    changes: [] as any[],
+  }
 
-    layersMap.set(l, i)
+  notes
+    .filter((n) => n.type === 'HiSpeed')
+    .forEach((n) => {
+      const hiSpeed = n as Note & { type: 'HiSpeed' }
 
-    notes
-      .filter((n) => n.type === 'HiSpeed' && n.layer === l)
-      .forEach((n) => {
-        const hiSpeed = n as Note & { type: 'HiSpeed' }
-
-        uscLayer.changes.push({
-          beat: hiSpeed.beat,
-          timeScale: hiSpeed.speed,
-          hideNotes: false,
-          timeSkip: 0,
-        })
+      uscLayer.changes.push({
+        beat: hiSpeed.beat,
+        timeScale: hiSpeed.speed,
       })
+    })
 
-    hiSpeedChanges.push(uscLayer)
-  })
+  usc.objects.push(uscLayer)
 
   notes.forEach((note) => {
     if (note.type === 'Tap') {
@@ -50,7 +33,7 @@ export const notesToUSC = (
         critical: note.isGold,
         lane: note.lane * 2,
         size: note.size,
-        timeScaleGroup: layersMap.get(note.layer) || 0,
+        timeScaleGroup: 0,
         trace: note.isTrace,
         type: 'single',
         ...(note.flickDir !== FlickDirection.None
@@ -110,7 +93,7 @@ export const notesToUSC = (
           ease,
           lane: n.lane * 2,
           size: n.size,
-          timeScaleGroup: layersMap.get(n.layer),
+          timeScaleGroup: 0,
           ...(n.type === 'HoldStart' ||
           ('tickType' in n && n.tickType !== TickType.Hidden)
             ? { critical: n.isGold }
@@ -196,7 +179,7 @@ export const notesToUSC = (
         beat: n.beat,
         lane: n.lane * 2,
         size: n.size,
-        timeScaleGroup: layersMap.get(n.layer),
+        timeScaleGroup: 0,
         critical: n.isGold,
         judgeType: n.isHidden ? 'none' : n.isTrace ? 'trace' : 'normal',
         ...(n.flickDir !== FlickDirection.None
@@ -293,24 +276,14 @@ export const USCToNotes = (data: {
 
   const { offset, objects } = data.usc
 
-  const hiSpeedLayers: HiSpeedLayer[] = []
-  const hiSpeedLayerMap = new Map<number, HiSpeedLayer>()
-
   objects
     .filter((o) => o.type === 'timeScaleGroup')
-    .forEach((t, i) => {
-      const layer: HiSpeedLayer = {
-        name: i.toString(),
-      }
-      hiSpeedLayers.push(layer)
-      hiSpeedLayerMap.set(i, layer)
-
+    .forEach((t) => {
       t.changes.forEach((c: { beat: number; timeScale: number }) => {
         const hiSpeed: Note = {
           type: 'HiSpeed',
           beat: c.beat,
           speed: c.timeScale,
-          layer,
           isEvent: true,
         }
 
@@ -338,7 +311,6 @@ export const USCToNotes = (data: {
           size: o.size,
           isTrace: o.trace,
           flickDir,
-          layer: hiSpeedLayerMap.get(o.timeScaleGroup)!,
         }
 
         notes.push(n)
@@ -392,7 +364,6 @@ export const USCToNotes = (data: {
               isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
               easingType,
               nextNode: {} as any,
-              layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
             }
 
             holdNotes.push(n)
@@ -419,7 +390,6 @@ export const USCToNotes = (data: {
               isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
               prevNode: {} as any,
               flickDir,
-              layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
             }
 
             ;(n as any).prevNode = holdNotes[i - 1]
@@ -462,7 +432,6 @@ export const USCToNotes = (data: {
               tickType,
               nextNode: {} as any,
               prevNode: {} as any,
-              layer: hiSpeedLayerMap.get(c.timeScaleGroup)!,
             }
 
             ;(n as any).prevNode = holdNotes[i - 1]
@@ -476,5 +445,5 @@ export const USCToNotes = (data: {
       }
     })
 
-  return { notes, offset, hiSpeedLayers }
+  return { notes, offset }
 }

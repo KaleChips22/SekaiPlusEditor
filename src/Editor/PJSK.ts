@@ -1,8 +1,7 @@
-import { HiSpeedLayer, Note } from './note'
+import { Note } from './note'
 import { ChartMetadata } from './draw'
 
 export const notesToPJSK = (
-  layers: HiSpeedLayer[],
   notes: Note[],
   offset: number,
   isExtendedChart: boolean,
@@ -24,7 +23,6 @@ export const notesToPJSK = (
         isGold: n.isGold,
         isTrace: n.isTrace,
         flickDir: n.flickDir,
-        layer: n.layer ? layers.indexOf(n.layer) : undefined,
       }
     } else if (n.type === 'HoldStart') {
       c = {
@@ -39,7 +37,6 @@ export const notesToPJSK = (
         easingType: n.easingType,
         // placeholders; will rewire after all clones are created
         nextNode: {} as any,
-        layer: n.layer ? layers.indexOf(n.layer) : undefined,
       } as any
     } else if (n.type === 'HoldTick') {
       c = {
@@ -53,7 +50,6 @@ export const notesToPJSK = (
         easingType: n.easingType,
         nextNode: {} as any,
         prevNode: {} as any,
-        layer: n.layer ? layers.indexOf(n.layer) : undefined,
       } as any
     } else if (n.type === 'HoldEnd') {
       c = {
@@ -66,7 +62,6 @@ export const notesToPJSK = (
         isHidden: n.isHidden,
         flickDir: n.flickDir,
         prevNode: {} as any,
-        layer: n.layer ? layers.indexOf(n.layer) : undefined,
       } as any
     } else if (n.type === 'BPMChange') {
       c = {
@@ -80,7 +75,6 @@ export const notesToPJSK = (
         type: 'HiSpeed',
         beat: n.beat,
         speed: n.speed,
-        layer: n.layer ? layers.indexOf(n.layer) : undefined,
         isEvent: true,
       } as any
     } else if (n.type === 'TimeSignature') {
@@ -124,7 +118,6 @@ export const notesToPJSK = (
     offset,
     version: 1.0,
     notes: clones,
-    layers: layers.map((layer) => ({ name: layer.name })),
     isExtendedChart,
     metadata: metadata || {
       title: '',
@@ -150,9 +143,6 @@ export const PJSKToNotes = (chart: any) => {
     isExtendedChart: boolean
     metadata?: ChartMetadata
   } = chart
-  const layers: HiSpeedLayer[] = chart.layers
-    ? chart.layers.map((layer: any) => ({ name: layer.name }))
-    : [{ name: 'Default Layer' }]
   const map = new Map<any, Note>()
   const clones: Note[] = []
 
@@ -169,7 +159,6 @@ export const PJSKToNotes = (chart: any) => {
         isGold: n.isGold,
         isTrace: n.isTrace,
         flickDir: n.flickDir,
-        layer: typeof n.layer === 'number' ? layers[n.layer] : layers[0],
       }
     } else if (n.type === 'HoldStart') {
       c = {
@@ -184,7 +173,6 @@ export const PJSKToNotes = (chart: any) => {
         easingType: n.easingType,
         // placeholders; will rewire after all clones are created
         nextNode: {} as any,
-        layer: typeof n.layer === 'number' ? layers[n.layer] : layers[0],
       }
     } else if (n.type === 'HoldTick') {
       c = {
@@ -198,7 +186,6 @@ export const PJSKToNotes = (chart: any) => {
         easingType: n.easingType,
         nextNode: {} as any,
         prevNode: {} as any,
-        layer: typeof n.layer === 'number' ? layers[n.layer] : layers[0],
       }
     } else if (n.type === 'HoldEnd') {
       c = {
@@ -211,7 +198,6 @@ export const PJSKToNotes = (chart: any) => {
         isHidden: n.isHidden,
         flickDir: n.flickDir,
         prevNode: {} as any,
-        layer: typeof n.layer === 'number' ? layers[n.layer] : layers[0],
       }
     } else if (n.type === 'BPMChange') {
       c = {
@@ -225,7 +211,6 @@ export const PJSKToNotes = (chart: any) => {
         type: 'HiSpeed',
         beat: n.beat,
         speed: n.speed,
-        layer: typeof n.layer === 'number' ? layers[n.layer] : layers[0],
         isEvent: true,
       }
     } else if (n.type === 'TimeSignature') {
@@ -266,7 +251,6 @@ export const PJSKToNotes = (chart: any) => {
   return {
     offset,
     notes: clones,
-    layers,
     isExtendedChart,
     metadata: metadata || {
       title: '',

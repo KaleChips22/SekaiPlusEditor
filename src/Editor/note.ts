@@ -4,7 +4,6 @@ interface BaseNote {
   size: number
   type: string
 
-  layer: HiSpeedLayer
   scaledHitTime?: number
 }
 
@@ -30,8 +29,6 @@ export enum EasingType {
   Linear,
   EaseIn,
   EaseOut,
-  EaseInOut,
-  EaseOutIn,
 }
 
 export enum TickType {
@@ -47,8 +44,6 @@ export enum TickType {
 //   lane: number
 //   size: number
 
-//   layer: HiSpeedLayer
-
 //   isGold: boolean
 //   isTrace: boolean
 //   flickDir: FlickDirection
@@ -56,7 +51,6 @@ export enum TickType {
 
 interface TapNote {
   type: 'Tap'
-  layer: HiSpeedLayer
   isGold: boolean
   isTrace: boolean
   flickDir: FlickDirection
@@ -115,8 +109,6 @@ interface BPMChange {
 interface HiSpeed {
   type: 'HiSpeed'
   speed: number
-
-  layer: HiSpeedLayer
 }
 
 interface TimeSignature {
@@ -132,7 +124,3 @@ interface TimeSignature {
 // interface FeverEnd {
 //   type: 'FeverEnd'
 // }
-
-export interface HiSpeedLayer {
-  name: string
-}

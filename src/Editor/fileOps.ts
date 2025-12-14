@@ -1,13 +1,10 @@
 import {
   clearHistory,
-  setChartLayers,
   setChartNotes,
   setIsExtendedChart,
   setMusicOffset,
-  setSelectedLayerIndex,
   setChartMetadata,
   resetChartMetadata,
-  chartLayers,
 } from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
@@ -26,17 +23,12 @@ export const openFile = () => {
     const result = await window.ipcRenderer.openFile()
 
     if (result) {
-      let json = {}
-      if (result.filePath.endsWith('.sus')) {
-        json = { usc: susToUSC(result.content) }
-      } else {
-        json = JSON.parse(result.content)
-      }
+      const json = { usc: susToUSC(result.content) }
 
       if ('usc' in json) {
         // console.log(json)
         updateCurrentFilePath(null)
-        const { notes, offset, hiSpeedLayers } = USCToNotes(json as any)
+        const { notes, offset } = USCToNotes(json as any)
 
         notes.push({
           beat: 0,
@@ -48,21 +40,18 @@ export const openFile = () => {
 
         setMusicOffset(offset)
         setChartNotes(notes)
-        setChartLayers(hiSpeedLayers)
         resetChartMetadata()
         clearHistory()
         window.dispatchEvent(new CustomEvent('metadataLoaded'))
       } else {
         updateCurrentFilePath(result.filePath)
-        const { notes, offset, layers, isExtendedChart, metadata } =
-          PJSKToNotes(json)
+        const { notes, offset, isExtendedChart, metadata } = PJSKToNotes(json)
 
         // console.log(notes)
 
         setIsExtendedChart(true)
         setMusicOffset(offset)
         setChartNotes(notes)
-        setChartLayers(layers)
         setIsExtendedChart(isExtendedChart)
         if (metadata) {
           setChartMetadata(metadata)
@@ -108,18 +97,11 @@ export const newFile = () => {
 
   setIsExtendedChart(true)
 
-  setChartLayers([
-    {
-      name: 'default',
-    },
-  ])
-
   setChartNotes([
     {
       beat: 0,
       type: 'HiSpeed',
       speed: 1,
-      layer: chartLayers[0],
       isEvent: true,
     },
     {
@@ -136,8 +118,6 @@ export const newFile = () => {
       isEvent: true,
     },
   ])
-
-  setSelectedLayerIndex(0)
 
   setIsExtendedChart(false)
 
