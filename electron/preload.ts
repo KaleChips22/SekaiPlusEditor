@@ -37,12 +37,16 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   exportChart: (
     uscContent: string,
     levelDataContent: any,
+    susContent: string,
+    canExportSus: boolean,
     defaultName: string,
   ) =>
     ipcRenderer.invoke(
       'export-chart',
       uscContent,
       levelDataContent,
+      susContent,
+      canExportSus,
       defaultName,
     ),
 })

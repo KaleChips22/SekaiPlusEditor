@@ -22,11 +22,11 @@ export const notesToUSC = (
     offset,
   }
 
-  const hiSpeedChanges: USCTimeScaleChange[] = []
+  const hiSpeedChanges: any[] = []
   const layersMap = new Map<HiSpeedLayer, number>()
 
   layers.forEach((l, i) => {
-    const uscLayer: USCTimeScaleChange = {
+    const uscLayer = {
       type: 'timeScaleGroup',
       changes: [],
     }
@@ -342,7 +342,7 @@ export const USCToNotes = (data: {
         if ('direction' in o) {
           if (o.direction === 'left') flickDir = FlickDirection.Left
           else if (o.direction === 'right') flickDir = FlickDirection.Right
-          else flickDir = FlickDirection.Default
+          else if (o.direction === 'up') flickDir = FlickDirection.Default
         }
         const n = {
           type: 'Tap',
@@ -412,10 +412,10 @@ export const USCToNotes = (data: {
             holdNotes.push(n)
           } else if (i === connections.length - 1) {
             let flickDir = FlickDirection.None
-            if (c.type === 'single') {
+            if (c.type === 'end') {
               if (c.direction === 'left') flickDir = FlickDirection.Left
               else if (c.direction === 'right') flickDir = FlickDirection.Right
-              else flickDir = FlickDirection.Default
+              else if (c.direction === 'up') flickDir = FlickDirection.Default
             }
 
             const n = {

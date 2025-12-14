@@ -43,7 +43,7 @@ class HistoryManager {
    */
   undo(currentNotes: Note[]): Note[] | null {
     if (this.undoStack.length === 0) {
-      console.log('Nothing to undo')
+      // console.log('Nothing to undo')
       return null
     }
 
@@ -70,7 +70,7 @@ class HistoryManager {
    */
   redo(currentNotes: Note[]): Note[] | null {
     if (this.redoStack.length === 0) {
-      console.log('Nothing to redo')
+      // console.log('Nothing to redo')
       return null
     }
 

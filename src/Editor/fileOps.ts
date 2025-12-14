@@ -34,7 +34,7 @@ export const openFile = () => {
       }
 
       if ('usc' in json) {
-        console.log(json)
+        // console.log(json)
         updateCurrentFilePath(null)
         const { notes, offset, hiSpeedLayers } = USCToNotes(json as any)
 
