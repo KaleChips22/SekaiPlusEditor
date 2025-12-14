@@ -10,11 +10,7 @@ import {
   getIsExtendedChart,
 } from '../../editor/draw'
 
-const ChartProperties = ({
-  setIsExtendedChart,
-}: {
-  setIsExtendedChart: (value: boolean) => void
-}) => {
+const ChartProperties = () => {
   const [formData, setFormData] = useState(() => {
     const metadata = getChartMetadata()
     return {
@@ -68,13 +64,12 @@ const ChartProperties = ({
         SEVolume: metadata.SEVolume,
         isExtendedChart: extended,
       }))
-      setIsExtendedChart(extended)
     }
 
     window.addEventListener('metadataLoaded', handleMetadataLoaded)
     return () =>
       window.removeEventListener('metadataLoaded', handleMetadataLoaded)
-  }, [setIsExtendedChart])
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -290,7 +285,7 @@ const ChartProperties = ({
         />
       </div>
 
-      <div
+      {/*<div
         className="bg-neutral-800 px-2 py-0.5 flex gap-2 items-center justify-start mb-1"
         onClick={() => setAdvancedExpanded((p) => !p)}
       >
@@ -309,27 +304,7 @@ const ChartProperties = ({
           !advancedExpanded && 'hidden',
         )}
       >
-        <span className="flex-1">Extended Chart</span>
-        <input
-          className="bg-neutral-800/50 outline-none ring-0 accent-accent"
-          type="checkbox"
-          checked={formData.isExtendedChart}
-          onChange={() => {
-            if (
-              formData.isExtendedChart ||
-              !confirm(
-                'Are you sure you want to enable extended chart features? You will not be able to revert this decision.',
-              )
-            )
-              return
-            setFormData({
-              ...formData,
-              isExtendedChart: true,
-            })
-            setIsExtendedChart(true)
-          }}
-        />
-      </div>
+      </div>*/}
     </div>
   )
 }
