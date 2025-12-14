@@ -309,7 +309,7 @@ const ChartProperties = ({
           !advancedExpanded && 'hidden',
         )}
       >
-        <span className="flex-1">Title</span>
+        <span className="flex-1">Extended Chart</span>
         <input
           className="bg-neutral-800/50 outline-none ring-0 accent-accent"
           type="checkbox"

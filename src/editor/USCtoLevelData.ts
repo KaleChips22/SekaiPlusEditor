@@ -31,7 +31,7 @@ class Entity {
   }
 
   export() {
-    console.log(this.data)
+    // console.log(this.data)
 
     return {
       name: this.name,
@@ -60,9 +60,9 @@ class Entity {
 }
 
 const DIRECTIONS = {
-  upLeft: 1,
+  left: 1,
   up: 0,
-  upRight: 2,
+  right: 2,
 }
 
 const CONNECTOR_EASES = {
@@ -190,7 +190,7 @@ export const USCtoLevelData = (usc: any) => {
       lane: note.lane || 0,
       size: note.size || 1,
       direction:
-        DIRECTIONS[(note.direction as 'upLeft' | 'upRight' | 'up') ?? 'up'],
+        DIRECTIONS[(note.direction as 'left' | 'right' | 'up') ?? 'up'],
       isAttached: 0,
       connectorEase: 1,
       isSeparator: 0,
@@ -292,7 +292,7 @@ export const USCtoLevelData = (usc: any) => {
         lane: note.lane || 0,
         size: note.size || 1,
         direction:
-          DIRECTIONS[(note.direction as 'up' | 'upLeft' | 'upRight') ?? 'up'],
+          DIRECTIONS[(note.direction as 'up' | 'left' | 'right') ?? 'up'],
         isAttached: isAttached ? 1 : 0,
         connectorEase:
           CONNECTOR_EASES[

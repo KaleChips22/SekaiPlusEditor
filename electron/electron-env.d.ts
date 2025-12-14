@@ -31,6 +31,8 @@ interface Window {
     exportChart: (
       uscContent: string,
       levelDataContent: any,
+      susData: string,
+      canExportSus: boolean,
       defaultName: string,
     ) => Promise<{
       success: boolean

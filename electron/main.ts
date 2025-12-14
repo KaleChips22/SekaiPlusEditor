@@ -289,12 +289,20 @@ ipcMain.handle('show-settings', () => {
 
 ipcMain.handle(
   'export-chart',
-  async (_, uscContent, levelDataContent, defaultName) => {
+  async (
+    _,
+    uscContent,
+    levelDataContent,
+    susData,
+    canExportSus,
+    defaultName,
+  ) => {
     const result = await dialog.showSaveDialog(win!, {
       defaultPath: defaultName || 'Untitled',
       filters: [
         { name: 'USC', extensions: ['.usc'] },
         { name: 'Level Data', extensions: ['.json.gz'] },
+        ...(canExportSus ? [{ name: 'SUS', extensions: ['.sus'] }] : []),
       ],
     })
 
@@ -306,6 +314,8 @@ ipcMain.handle(
 
         if (ext === '.usc') {
           content = uscContent
+        } else if (ext === '.sus') {
+          content = susData
         } else {
           // Default to levelData for .json or other extensions
           content = levelDataContent

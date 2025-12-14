@@ -24,6 +24,8 @@ import {
   hasCachedScaledTimes,
   updateBox,
 } from '../preview/draw'
+// import { uscToSUS } from './USCtoSUS'
+import { USCtoSUS } from './USCtoSUSv2'
 
 const BEAT_HEIGHT = 220
 export let laneWidth = 55
@@ -308,9 +310,9 @@ export const setMusic = (file: File) => {
 
       waveform = wf
       waveformReady = true
-      console.log('waveform ready', waveformDuration, waveform.length)
+      // console.log('waveform ready', waveformDuration, waveform.length)
     } catch (e) {
-      console.warn('failed to decode audio for waveform', e)
+      // console.warn('failed to decode audio for waveform', e)
       waveform = null
       waveformReady = false
     }
@@ -463,6 +465,44 @@ export const chartNotes: Note[] = [
    */
 ]
 
+export const setSelectedHoldsHidden = (hidden: boolean) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (note.type === 'HoldStart' || note.type === 'HoldEnd')
+      (note as HoldStart | HoldEnd).isHidden = hidden
+  })
+}
+
+export const setSelectedFlickType = (type: FlickDirection) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (
+      note.type === 'Tap' &&
+      (note as TapNote).flickDir !== FlickDirection.None
+    )
+      (note as TapNote).flickDir = type
+  })
+}
+
+export const setSelectedTickType = (type: TickType) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (note.type === 'HoldTick') (note as HoldTick).tickType = type
+  })
+}
+
+export const setSelectedEaseType = (type: EasingType) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (note.type === 'HoldStart' || note.type === 'HoldTick')
+      (note as HoldStart | HoldTick).easingType = type
+  })
+}
+
 export const setChartNotes = (notes: Note[]) => {
   disableCachedScaledTimes()
   chartNotes.splice(0)
@@ -560,6 +600,16 @@ export const exportUSC = async () => {
   const uscFile = notesToUSC(chartLayers, chartNotes, musicOffsetMs)
   const uscContent = JSON.stringify(uscFile)
   const levelData = JSON.stringify(USCtoLevelData(uscFile.usc))
+  let susData = ''
+  const canExportSus = !isExtendedChart
+  if (canExportSus) {
+    susData = USCtoSUS(uscFile.usc, {
+      title: '',
+      artist: '',
+      designer: '',
+      waveoffset: 0,
+    })
+  }
   // const levelData = JSON.stringify(uscToLevelData(uscFile.usc))
 
   const textEncoder = new TextEncoder()
@@ -582,6 +632,8 @@ export const exportUSC = async () => {
   const result = await window.ipcRenderer.exportChart(
     uscContent,
     compressedBytes,
+    susData,
+    canExportSus,
     musicScoreName || 'Untitled',
   )
 
