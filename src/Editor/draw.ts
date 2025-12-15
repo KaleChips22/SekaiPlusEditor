@@ -657,6 +657,10 @@ export const deleteSelected = (skipSave: boolean = false) => {
     } else if (n.type === 'HoldTick') {
       n.prevNode.nextNode = n.nextNode
       n.nextNode.prevNode = n.prevNode
+    } else if (n.type === 'FeverChance') {
+      selectedIndeces.add(chartNotes.findIndex((n) => n.type === 'FeverStart'))
+    } else if (n.type === 'FeverStart') {
+      selectedIndeces.add(chartNotes.findIndex((n) => n.type === 'FeverChance'))
     }
   })
   for (let i = chartNotes.length - 1; i > 0; i--) {
