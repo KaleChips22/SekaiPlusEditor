@@ -53,6 +53,21 @@ export const notesToUSC = (notes: Note[], offset: number) => {
         beat: note.beat,
         bpm: note.BPM,
       })
+    } else if (note.type === 'FeverChance') {
+      usc.objects.push({
+        type: 'feverChance',
+        beat: note.beat,
+      })
+    } else if (note.type === 'FeverStart') {
+      usc.objects.push({
+        type: 'feverStart',
+        beat: note.beat,
+      })
+    } else if (note.type === 'Skill') {
+      usc.objects.push({
+        type: 'skill',
+        beat: note.beat,
+      })
     } else if (note.type === 'HoldStart') {
       const connections: any[] = []
 
@@ -65,12 +80,6 @@ export const notesToUSC = (notes: Note[], offset: number) => {
             break
           case EasingType.EaseOut:
             ease = 'out'
-            break
-          case EasingType.EaseInOut:
-            ease = 'inout'
-            break
-          case EasingType.EaseOutIn:
-            ease = 'outin'
             break
           case EasingType.Linear:
           default:
@@ -323,6 +332,30 @@ export const USCToNotes = (data: {
         }
 
         notes.push(n)
+      } else if (o.type === 'feverChance') {
+        const n: Note = {
+          type: 'FeverChance',
+          beat: o.beat,
+          isEvent: true,
+        }
+
+        notes.push(n)
+      } else if (o.type === 'feverStart') {
+        const n: Note = {
+          type: 'FeverStart',
+          beat: o.beat,
+          isEvent: true,
+        }
+
+        notes.push(n)
+      } else if (o.type === 'skill') {
+        const n: Note = {
+          type: 'Skill',
+          beat: o.beat,
+          isEvent: true,
+        }
+
+        notes.push(n)
       } else if (o.type === 'slide' || o.type === 'guide') {
         if (!('connections' in o || 'midpoints' in o)) return
         const connections = o[
@@ -341,12 +374,7 @@ export const USCToNotes = (data: {
               case 'out':
                 easingType = EasingType.EaseOut
                 break
-              case 'inout':
-                easingType = EasingType.EaseInOut
-                break
-              case 'outin':
-                easingType = EasingType.EaseOutIn
-                break
+
               case 'linear':
               default:
                 easingType = EasingType.Linear
@@ -405,11 +433,7 @@ export const USCToNotes = (data: {
               case 'out':
                 easingType = EasingType.EaseOut
                 break
-              case 'inout':
-                easingType = EasingType.EaseInOut
-                break
-              case 'outin':
-                easingType = EasingType.EaseOutIn
+
                 break
               case 'linear':
               default:

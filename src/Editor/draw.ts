@@ -1361,12 +1361,19 @@ const getEventSize = (event: SolidEvent): { width: number; height: number } => {
   textEl.style.fontSize = fontSize
   textEl.style.fontFamily = fontFamily
   textEl.style.display = 'inline'
-  textEl.innerText =
-    event.type === 'HiSpeed'
-      ? `${event.speed}x`
-      : event.type === 'BPMChange'
-        ? `${event.BPM} BPM`
-        : `${event.top}/${event.bottom}`
+  if (event.type === 'FeverChance') {
+    textEl.innerText = 'Fever Chance'
+  } else if (event.type === 'FeverStart') {
+    textEl.innerText = 'Fever Start'
+  } else if (event.type === 'Skill') {
+    textEl.innerText = 'Skill'
+  } else if (event.type === 'HiSpeed') {
+    textEl.innerText = `${event.speed}x`
+  } else if (event.type === 'BPMChange') {
+    textEl.innerText = `${event.BPM} BPM`
+  } else {
+    textEl.innerText = `${event.top}/${event.bottom}`
+  }
   document.body.appendChild(textEl)
   const { width: textWidth, height: textHeight } =
     textEl.getBoundingClientRect()
@@ -1387,7 +1394,16 @@ const computeEventOffsets = () => {
   const spacing = 20
 
   // placed rects for already-placed events
-  const placed: {
+  const placedLeft: {
+    top: number
+    bottom: number
+    left: number
+    right: number
+    event: SolidEvent
+  }[] = []
+
+  // placed rects for already-placed events
+  const placedRight: {
     top: number
     bottom: number
     left: number
@@ -1405,6 +1421,9 @@ const computeEventOffsets = () => {
         BPMChange: 0,
         TimeSignature: 1,
         HiSpeed: 2,
+        FeverStart: 3,
+        FeverEnd: 4,
+        Skill: 5,
       }
       return (order[a.type] ?? 99) - (order[b.type] ?? 99)
     })
@@ -1416,7 +1435,14 @@ const computeEventOffsets = () => {
       // try offsets starting from `spacing` and push right until no conflicts
       let offset = spacing
       for (let maxIterations = 0; maxIterations < 120; maxIterations++) {
-        const left = baseX + offset
+        const isLeftSideEvent =
+          ev.type === 'FeverStart' ||
+          ev.type === 'FeverChance' ||
+          ev.type === 'Skill'
+        const placed = isLeftSideEvent ? placedLeft : placedRight
+        const left = isLeftSideEvent
+          ? width - (baseX + offset + size.width)
+          : baseX + offset
         const right = left + size.width
 
         // check conflicts with placed rects that vertically overlap
@@ -1447,7 +1473,8 @@ const computeEventOffsets = () => {
 
   // convert to map for fast lookup
   const map = new Map<SolidEvent, number>()
-  for (const p of placed) map.set(p.event, p.left - baseX)
+  for (const p of placedLeft) map.set(p.event, p.left - baseX)
+  for (const p of placedRight) map.set(p.event, p.left - baseX)
   return map
 }
 
@@ -1785,6 +1812,118 @@ const drawNote = (n: Note) => {
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
     ctx.fillText(n.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'FeverChance') {
+    const y = beatToY(beat)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    const startX = getEventOffset(n)
+
+    ctx.beginPath()
+    if (startX > width / 2) {
+      ctx.moveTo(lanesEdge, y)
+    } else {
+      ctx.moveTo(width - lanesEdge, y)
+    }
+    ctx.lineTo(lanesEdge + startX + 4, y)
+    ctx.strokeStyle = '#9966cc'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#bb88ee'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = '#9966cc'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#bb88ee'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('Fever Chance', lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'FeverStart') {
+    const y = beatToY(beat)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    const startX = getEventOffset(n)
+
+    ctx.beginPath()
+    if (startX > width / 2) {
+      ctx.moveTo(lanesEdge, y)
+    } else {
+      ctx.moveTo(width - lanesEdge, y)
+    }
+    ctx.lineTo(lanesEdge + startX + 4, y)
+    ctx.strokeStyle = '#9966cc'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#bb88ee'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = '#9966cc'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#bb88ee'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('Fever Start', lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'Skill') {
+    const y = beatToY(beat)
+
+    const startX = getEventOffset(n)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    ctx.beginPath()
+    if (startX > width / 2) {
+      ctx.moveTo(lanesEdge, y)
+    } else {
+      ctx.moveTo(width - lanesEdge, y)
+    }
+    ctx.lineTo(lanesEdge + startX + 4, y)
+
+    ctx.strokeStyle = '#5577ff'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#7799ff'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = '#5577ff'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#7799ff'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('Skill', lanesEdge + startX + 8, y - 8)
 
     return
   }
@@ -2693,7 +2832,11 @@ const draw = (timeStamp: number) => {
       }
     }
 
-    if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(globalState.selectedTool)) {
+    if (
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(
+        globalState.selectedTool,
+      )
+    ) {
       if (
         notesAtPos.length > 0 &&
         ![8, 9, 10].includes(globalState.selectedTool)
@@ -2850,6 +2993,51 @@ const draw = (timeStamp: number) => {
               beat: nearestBeat,
               type: 'HiSpeed',
               speed: 1,
+              isEvent: true,
+            }
+
+            chartNotes.push(newNote)
+            _eventOffsetCache = computeEventOffsets()
+            disableCachedScaledTimes()
+          }
+        } else if (globalState.selectedTool === 11) {
+          if (
+            chartNotes.filter(
+              (n) =>
+                n.type === 'FeverStart' ||
+                (n.type === 'Skill' && n.beat === nearestBeat),
+            ).length === 0
+          ) {
+            saveHistory()
+            const newStartNote: Note = {
+              beat: nearestBeat,
+              type: 'FeverChance',
+              isEvent: true,
+            }
+            const newEndNote: Note = {
+              beat:
+                nearestBeat +
+                getTsig(nearestBeat).bottom / globalState.division,
+              type: 'FeverStart',
+              isEvent: true,
+            }
+
+            chartNotes.push(newStartNote, newEndNote)
+            _eventOffsetCache = computeEventOffsets()
+            disableCachedScaledTimes()
+          }
+        } else if (globalState.selectedTool === 12) {
+          if (
+            chartNotes.filter(
+              (n) =>
+                ['FeverStart', 'FeverChance', 'Skill'].includes(n.type) &&
+                n.beat === nearestBeat,
+            ).length === 0
+          ) {
+            saveHistory()
+            const newNote: Note = {
+              beat: nearestBeat,
+              type: 'Skill',
               isEvent: true,
             }
 

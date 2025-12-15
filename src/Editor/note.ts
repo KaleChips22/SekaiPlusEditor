@@ -16,7 +16,8 @@ interface BaseEvent {
 export type Note = SolidNote | SolidEvent
 
 export type SolidNote = BaseNote & (TapNote | HoldStart | HoldEnd | HoldTick)
-export type SolidEvent = BaseEvent & (BPMChange | HiSpeed | TimeSignature)
+export type SolidEvent = BaseEvent &
+  (BPMChange | HiSpeed | TimeSignature | FeverChance | FeverStart | Skill)
 
 export enum FlickDirection {
   Default,
@@ -117,10 +118,14 @@ interface TimeSignature {
   bottom: number
 }
 
-// interface FeverStart {
-//   type: 'FeverStart'
-// }
+interface FeverChance {
+  type: 'FeverChance'
+}
 
-// interface FeverEnd {
-//   type: 'FeverEnd'
-// }
+interface FeverStart {
+  type: 'FeverStart'
+}
+
+interface Skill {
+  type: 'Skill'
+}
