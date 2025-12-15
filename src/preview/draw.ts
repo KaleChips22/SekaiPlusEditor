@@ -641,7 +641,7 @@ const drawPreviewNote = (note: Note, scaledTime: number, flatTime: number) => {
   if ((note.type === 'HoldStart' || note.type === 'HoldEnd') && note.isHidden)
     return
 
-  if (note.scaledHitTime === undefined) return
+  if (!('scaledHitTime' in note) || note.scaledHitTime === undefined) return
 
   const noteImageName = getNoteImageName(note)
   // console.log(noteImageName)

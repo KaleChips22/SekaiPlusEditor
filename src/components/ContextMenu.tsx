@@ -6,7 +6,6 @@ import {
   cut,
   deleteSelected,
   flipSelection,
-  isExtendedChart,
   paste,
   repeatHoldMids,
   setSelectedEaseType,
@@ -81,18 +80,6 @@ const ContextMenu = () => {
           label: 'Ease Out',
           action: () => setSelectedEaseType(EasingType.EaseOut),
         },
-        ...(isExtendedChart
-          ? [
-              {
-                label: 'Ease In-Out',
-                action: () => setSelectedEaseType(EasingType.EaseInOut),
-              },
-              {
-                label: 'Ease Out-In',
-                action: () => setSelectedEaseType(EasingType.EaseOutIn),
-              },
-            ]
-          : []),
       ],
     },
     {

@@ -29,7 +29,7 @@ const ChartProperties = () => {
 
   const [metadataExpanded, setMetadataExpanded] = useState(true)
   const [audioExpanded, setAudioExpanded] = useState(true)
-  const [advancedExpanded, setAdvancedExpanded] = useState(false)
+  // const [advancedExpanded, setAdvancedExpanded] = useState(false)
 
   const dragging = useRef(false)
   const dragStartX = useRef(0)
@@ -219,7 +219,9 @@ const ChartProperties = () => {
             onPointerUp={(e) => {
               try {
                 e.currentTarget.releasePointerCapture(e.pointerId)
-              } catch {}
+              } catch {
+                // Ignore error
+              }
               dragging.current = false
               document.body.style.cursor = ''
               document.body.style.userSelect = ''

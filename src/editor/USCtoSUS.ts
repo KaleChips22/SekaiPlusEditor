@@ -87,7 +87,10 @@ export const uscToSUS = (
       timeScaleGroups
         .get(groupId)!
         .push(
-          ...obj.changes.map((c) => ({ beat: c.beat, timeScale: c.timeScale })),
+          ...obj.changes.map((c: any) => ({
+            beat: c.beat,
+            timeScale: c.timeScale,
+          })),
         )
     }
   }

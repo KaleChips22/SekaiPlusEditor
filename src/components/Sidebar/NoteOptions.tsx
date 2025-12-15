@@ -67,8 +67,6 @@ const NoteOptions = () => {
         <option value={EasingType.Linear}>Linear</option>
         <option value={EasingType.EaseIn}>Ease In</option>
         <option value={EasingType.EaseOut}>Ease Out</option>
-        <option value={EasingType.EaseInOut}>Ease In Out</option>
-        <option value={EasingType.EaseOutIn}>Ease Out In</option>
       </select>
       <span>Flick Direction</span>
       <select
