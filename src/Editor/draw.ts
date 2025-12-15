@@ -1,37 +1,40 @@
 import type { globalState } from '../lib'
 import { saveFile, saveFileAs } from './fileOps'
 import {
-  BPMChange,
   EasingType,
   FlickDirection,
-  HiSpeed,
-  HoldEnd,
-  HoldStart,
-  HoldTick,
-  TapNote,
+  SolidEvent,
+  SolidNote,
   TickType,
-  TimeSignature,
   type Note,
 } from './note'
 import { getRect } from './noteImage'
 import { notesToPJSK } from './PJSK'
 import { notesToUSC } from './USC'
 import { historyManager } from './history'
-import { USCtoLevelData } from './USCtoLevelData'
+import {
+  disableCachedScaledTimes,
+  hasCachedScaledTimes,
+  updateBox,
+} from '../preview/draw'
+// import { uscToSUS } from './USCtoSUS'
+import { USCtoSUS } from './USCtoSUSv2'
 
 const BEAT_HEIGHT = 220
-
-let laneWidth = 55
+export let laneWidth = 55
 const NOTE_HEIGHT = 45
 
 // let tSigTop = 4
 // let tSigBottom = 4
-let yOffset = 0
+export let yOffset = 0
 let pZoom = 0
 
-let cursorPos = 0
+export let cursorPos = 0
+export const setCursorPos = (p: number) => (cursorPos = p)
 
-let isPlaying = false
+export let isPlaying = false
+export let isPreviewing = false
+export const setPreviewing = (p: boolean) => (isPreviewing = p)
 
 let mouseIsPressed = false
 let pMouseIsPressed = false
@@ -50,7 +53,7 @@ let isPasting = false
 let hideTickOutlines = false
 let hideTickOutlinesOnPlay = true
 
-// let isShiftPressed = false
+let isShiftPressed = false
 let isCtrlPressed = false
 let isAltPressed = false
 
@@ -90,6 +93,44 @@ export const setNextNoteOptions = (options: Partial<NextNoteOptions>) => {
 
 let musicScoreName = ''
 export const setMusicScoreName = (name: string) => (musicScoreName = name)
+
+export interface ChartMetadata {
+  title: string
+  designer: string
+  artist: string
+  jacket: string
+  masterVolume: number
+  BGMVolume: number
+  SEVolume: number
+}
+
+let chartMetadata: ChartMetadata = {
+  title: '',
+  designer: '',
+  artist: '',
+  jacket: '',
+  masterVolume: 100,
+  BGMVolume: 100,
+  SEVolume: 100,
+}
+
+export const getChartMetadata = () => chartMetadata
+
+export const setChartMetadata = (metadata: Partial<ChartMetadata>) => {
+  chartMetadata = { ...chartMetadata, ...metadata }
+}
+
+export const resetChartMetadata = () => {
+  chartMetadata = {
+    title: '',
+    designer: '',
+    artist: '',
+    jacket: '',
+    masterVolume: 100,
+    BGMVolume: 100,
+    SEVolume: 100,
+  }
+}
 
 const musicPlayer = new Audio()
 let currentMusicUrl: string | null = null
@@ -262,9 +303,9 @@ export const setMusic = (file: File) => {
 
       waveform = wf
       waveformReady = true
-      console.log('waveform ready', waveformDuration, waveform.length)
+      // console.log('waveform ready', waveformDuration, waveform.length)
     } catch (e) {
-      console.warn('failed to decode audio for waveform', e)
+      // console.warn('failed to decode audio for waveform', e)
       waveform = null
       waveformReady = false
     }
@@ -276,29 +317,26 @@ export const setMusic = (file: File) => {
 const imageSource = document.createElement('img')
 imageSource.src = 'editor_sprites/notes.png'
 
-const chartNotes: Note[] = [
+export const chartNotes: Note[] = [
   {
+    isEvent: true,
     type: 'HiSpeed',
     beat: 0,
-    size: 0,
-    lane: 0,
     speed: 1,
-  } as HiSpeed,
+  },
   {
+    isEvent: true,
     type: 'TimeSignature',
     beat: 0,
-    size: 0,
-    lane: 0,
     top: 4,
     bottom: 4,
-  } as TimeSignature,
+  },
   {
+    isEvent: true,
     type: 'BPMChange',
     beat: 0,
-    size: 0,
-    lane: 0,
     BPM: 160,
-  } as BPMChange,
+  },
   /*{
     beat: 0.5,
     lane: 0,
@@ -374,18 +412,89 @@ const chartNotes: Note[] = [
    */
 ]
 
+export const setSelectedHoldsHidden = (hidden: boolean) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (note.type === 'HoldStart' || note.type === 'HoldEnd')
+      note.isHidden = hidden
+  })
+}
+
+export const setSelectedFlickType = (type: FlickDirection) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (note.type === 'Tap' && note.flickDir !== FlickDirection.None)
+      note.flickDir = type
+  })
+}
+
+export const setSelectedTickType = (type: TickType) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (note.type === 'HoldTick') note.tickType = type
+  })
+}
+
+export const setSelectedEaseType = (type: EasingType) => {
+  chartNotes.forEach((note, i) => {
+    if (!selectedIndeces.has(i)) return
+
+    if (note.type === 'HoldStart' || note.type === 'HoldTick')
+      note.easingType = type
+  })
+}
+
 export const setChartNotes = (notes: Note[]) => {
+  disableCachedScaledTimes()
   chartNotes.splice(0)
 
   notes.forEach((n) => chartNotes.push(n))
 
+  // Cache holdStart and holdEnd references for all hold chains
+  const processedHolds = new Set<
+    Note & { type: 'HoldStart' | 'HoldTick' | 'HoldEnd' }
+  >()
+  notes.forEach((n) => {
+    if (
+      (n.type === 'HoldStart' ||
+        n.type === 'HoldTick' ||
+        n.type === 'HoldEnd') &&
+      !processedHolds.has(n)
+    ) {
+      cacheHoldChainReferences(n)
+
+      // Mark all nodes in this chain as processed
+      let current = n
+      while ('prevNode' in current && current.prevNode) {
+        current = current.prevNode
+      }
+      while (true) {
+        processedHolds.add(current)
+        if (!('nextNode' in current) || !current.nextNode) break
+        current = current.nextNode
+      }
+    }
+  })
+
   _eventOffsetCache = computeEventOffsets()
+}
+
+export let isExtendedChart = false
+
+export const getIsExtendedChart = () => isExtendedChart
+
+export const setIsExtendedChart = (value: boolean) => {
+  isExtendedChart = value
 }
 
 /**
  * Save the current chart state to history before making modifications
  */
 const saveHistory = () => {
+  if (isPreviewing) return
   historyManager.saveState(chartNotes)
 }
 
@@ -393,6 +502,8 @@ const saveHistory = () => {
  * Undo the last action
  */
 export const undo = () => {
+  if (isPreviewing) return
+
   const previousState = historyManager.undo(chartNotes)
   if (previousState) {
     setChartNotes(previousState)
@@ -404,6 +515,8 @@ export const undo = () => {
  * Redo the last undone action
  */
 export const redo = () => {
+  if (isPreviewing) return
+
   const nextState = historyManager.redo(chartNotes)
   if (nextState) {
     setChartNotes(nextState)
@@ -414,12 +527,12 @@ export const redo = () => {
 /**
  * Check if undo is available
  */
-export const canUndo = () => historyManager.canUndo()
+export const canUndo = () => !isPreviewing && historyManager.canUndo()
 
 /**
  * Check if redo is available
  */
-export const canRedo = () => historyManager.canRedo()
+export const canRedo = () => !isPreviewing && historyManager.canRedo()
 
 /**
  * Clear all history (useful when opening a new file)
@@ -430,30 +543,16 @@ export const clearHistory = () => {
 
 export const exportUSC = async () => {
   const uscFile = notesToUSC(chartNotes, musicOffsetMs)
-  const uscContent = JSON.stringify(uscFile)
-  const levelData = JSON.stringify(USCtoLevelData(uscFile.usc))
-  // const levelData = JSON.stringify(uscToLevelData(uscFile.usc))
-
-  const textEncoder = new TextEncoder()
-  const encodedLevelData = textEncoder.encode(levelData)
-
-  const readableStream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(encodedLevelData)
-      controller.close()
-    },
+  const susData = USCtoSUS(uscFile.usc, {
+    title: '',
+    artist: '',
+    designer: '',
+    waveoffset: 0,
   })
-
-  const compressedLevelData = readableStream.pipeThrough(
-    new CompressionStream('gzip'),
-  )
-
-  const compressedBytes = await new Response(compressedLevelData).bytes()
   // const levelDataArrayBuffer = await compressedBlob.arrayBuffer()
 
   const result = await window.ipcRenderer.exportChart(
-    uscContent,
-    compressedBytes,
+    susData,
     musicScoreName || 'Untitled',
   )
 
@@ -463,14 +562,24 @@ export const exportUSC = async () => {
 }
 
 export const saveAsPJSK = () => {
-  const pjsk = notesToPJSK(chartNotes, musicOffsetMs)
+  const pjsk = notesToPJSK(
+    chartNotes,
+    musicOffsetMs,
+    isExtendedChart,
+    chartMetadata,
+  )
   const pjskString = JSON.stringify(pjsk)
 
   saveFileAs(pjskString)
 }
 
 export const savePJSK = () => {
-  const pjsk = notesToPJSK(chartNotes, musicOffsetMs)
+  const pjsk = notesToPJSK(
+    chartNotes,
+    musicOffsetMs,
+    isExtendedChart,
+    chartMetadata,
+  )
   const pjskString = JSON.stringify(pjsk)
 
   saveFile(pjskString)
@@ -521,52 +630,67 @@ export const savePJSK = () => {
 const selectedIndeces = new Set<number>()
 
 export const deleteSelected = (skipSave: boolean = false) => {
+  if (isPreviewing) return
+
   if (!skipSave) saveHistory()
+
+  // Check if any deleted notes are HiSpeed changes
+  let hasHiSpeedChanges = false
+  chartNotes.forEach((n, i) => {
+    if (selectedIndeces.has(i) && n.type === 'HiSpeed') {
+      hasHiSpeedChanges = true
+    }
+  })
+
   chartNotes.forEach((n, i) => {
     if (!selectedIndeces.has(i)) return
     if (n.type === 'HoldStart') {
-      let j = n as HoldStart | HoldTick | HoldEnd
-      while ('nextNode' in j) {
-        selectedIndeces.add(chartNotes.indexOf(j.nextNode))
-        j = j.nextNode
+      while ('nextNode' in n) {
+        selectedIndeces.add(chartNotes.indexOf(n.nextNode))
+        n = n.nextNode
       }
     } else if (n.type === 'HoldEnd') {
-      let j = n as HoldStart | HoldTick | HoldEnd
-      while ('prevNode' in j) {
-        selectedIndeces.add(chartNotes.indexOf(j.prevNode))
-        j = j.prevNode
+      while ('prevNode' in n) {
+        selectedIndeces.add(chartNotes.indexOf(n.prevNode))
+        n = n.prevNode
       }
     } else if (n.type === 'HoldTick') {
-      // console.log(n)
-      const note = n as HoldTick
-      note.prevNode.nextNode = note.nextNode
-      note.nextNode.prevNode = note.prevNode
+      n.prevNode.nextNode = n.nextNode
+      n.nextNode.prevNode = n.prevNode
     }
   })
   for (let i = chartNotes.length - 1; i > 0; i--) {
     if (selectedIndeces.has(i)) chartNotes.splice(i, 1)
   }
   selectedIndeces.clear()
+
+  if (hasHiSpeedChanges) {
+    disableCachedScaledTimes()
+  }
 }
 
 export const selectAll = () => {
+  if (isPreviewing) return
+
   for (let i = 0; i < chartNotes.length; i++) {
-    if (!['BPMChange', 'HiSpeed', 'TimeSignature'].includes(chartNotes[i].type))
-      selectedIndeces.add(i)
+    const n = chartNotes[i]
+    if (!('isEvent' in n)) selectedIndeces.add(i)
   }
 }
 
 export const setHiSpeed = (speed: number) => {
+  if (isPreviewing) return
+
   if (selectedIndeces.size === 1) {
     saveHistory()
     selectedIndeces.forEach((i) => {
       const note = chartNotes[i]
 
       if (note.type !== 'HiSpeed') return
-      const n = note as HiSpeed
 
-      n.speed = speed
+      note.speed = speed
     })
+    disableCachedScaledTimes()
   }
 }
 
@@ -577,9 +701,8 @@ export const getDefaultHiSpeed = () => {
       const note = chartNotes[i]
 
       if (note.type !== 'HiSpeed') return
-      const n = note as HiSpeed
 
-      speed = n.speed
+      speed = note.speed
     })
   }
 
@@ -587,15 +710,16 @@ export const getDefaultHiSpeed = () => {
 }
 
 export const setBPM = (BPM: number) => {
+  if (isPreviewing) return
+
   if (selectedIndeces.size === 1) {
     saveHistory()
     selectedIndeces.forEach((i) => {
       const note = chartNotes[i]
 
       if (note.type !== 'BPMChange') return
-      const n = note as BPMChange
 
-      n.BPM = BPM
+      note.BPM = BPM
     })
   }
 }
@@ -607,9 +731,8 @@ export const getDefaultBPM = () => {
       const note = chartNotes[i]
 
       if (note.type !== 'BPMChange') return
-      const n = note as BPMChange
 
-      bpm = n.BPM
+      bpm = note.BPM
     })
   }
 
@@ -617,16 +740,17 @@ export const getDefaultBPM = () => {
 }
 
 export const setTimeSignature = (top: number, bottom: number) => {
+  if (isPreviewing) return
+
   if (selectedIndeces.size === 1) {
     saveHistory()
     selectedIndeces.forEach((i) => {
       const note = chartNotes[i]
 
       if (note.type !== 'TimeSignature') return
-      const n = note as TimeSignature
 
-      n.top = top
-      n.bottom = bottom
+      note.top = top
+      note.bottom = bottom
     })
   }
 }
@@ -638,29 +762,42 @@ export const getDefaultTimeSignature = () => {
       const note = chartNotes[i]
 
       if (note.type !== 'TimeSignature') return
-      const n = note as TimeSignature
 
-      tSig = { top: n.top, bottom: n.bottom }
+      tSig = { top: note.top, bottom: note.bottom }
     })
   }
 
   return tSig
 }
 
-const flipNotes = (notes: Note[]) => notes.forEach((n) => (n.lane *= -1))
+const flipNotes = (notes: Note[]) => {
+  if (isPreviewing) return
+
+  notes.forEach((n) => {
+    if ('lane' in n) n.lane *= -1
+  })
+}
 
 export const flipSelection = () => {
+  if (isPreviewing) return
+
   saveHistory()
-  selectedIndeces.forEach((i) => (chartNotes[i].lane *= -1))
+  chartNotes.forEach((n, i) => {
+    if (selectedIndeces.has(i) && 'lane' in n) n.lane *= -1
+  })
 }
 
 export const paste = (flip: boolean = false) => {
+  if (isPreviewing) return
+
   if (flip) flipNotes(clipboard)
 
   isPasting = true
 }
 
 export const copy = () => {
+  if (isPreviewing) return
+
   clipboard.splice(0)
 
   // Ensure full hold chains are included in the selection when copying.
@@ -676,7 +813,7 @@ export const copy = () => {
       n.type === 'HoldTick' ||
       n.type === 'HoldEnd'
     ) {
-      let j = n as HoldStart | HoldTick | HoldEnd
+      let j = n
 
       // walk backwards to the HoldStart
       while ('prevNode' in j && j.prevNode) {
@@ -686,7 +823,7 @@ export const copy = () => {
       }
 
       // reset to original and walk forwards to the HoldEnd
-      j = n as HoldStart | HoldTick | HoldEnd
+      j = n
       while ('nextNode' in j && j.nextNode) {
         const idx = chartNotes.indexOf(j.nextNode)
         if (idx >= 0) selectedIndeces.add(idx)
@@ -709,86 +846,76 @@ export const copy = () => {
     let c: Note
 
     if (n.type === 'Tap') {
-      const t = n as TapNote
       c = {
         type: 'Tap',
-        beat: t.beat,
-        lane: t.lane,
-        size: t.size,
-        isGold: t.isGold,
-        isTrace: t.isTrace,
-        flickDir: t.flickDir,
-      } as TapNote
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        flickDir: n.flickDir,
+      }
     } else if (n.type === 'HoldStart') {
-      const h = n as HoldStart
       c = {
         type: 'HoldStart',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isTrace: h.isTrace,
-        isHidden: h.isHidden,
-        isGuide: h.isGuide,
-        easingType: h.easingType,
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        isHidden: n.isHidden,
+        isGuide: n.isGuide,
+        easingType: n.easingType,
         // placeholders; will rewire after all clones are created
-        nextNode: {} as HoldEnd,
-      } as HoldStart
+        nextNode: {} as any,
+      }
     } else if (n.type === 'HoldTick') {
-      const h = n as HoldTick
       c = {
         type: 'HoldTick',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isGuide: h.isGuide,
-        tickType: h.tickType,
-        easingType: h.easingType,
-        nextNode: {} as HoldEnd,
-        prevNode: {} as HoldStart,
-      } as HoldTick
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isGuide: n.isGuide,
+        tickType: n.tickType,
+        easingType: n.easingType,
+        nextNode: {} as any,
+        prevNode: {} as any,
+      }
     } else if (n.type === 'HoldEnd') {
-      const h = n as HoldEnd
       c = {
         type: 'HoldEnd',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isTrace: h.isTrace,
-        isHidden: h.isHidden,
-        flickDir: h.flickDir,
-        prevNode: {} as HoldStart,
-      } as HoldEnd
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        isHidden: n.isHidden,
+        flickDir: n.flickDir,
+        prevNode: {} as any,
+      }
     } else if (n.type === 'BPMChange') {
-      const b = n as BPMChange
       c = {
         type: 'BPMChange',
-        beat: b.beat,
-        lane: 0,
-        size: 0,
-        BPM: b.BPM,
-      } as BPMChange
+        beat: n.beat,
+        BPM: n.BPM,
+        isEvent: true,
+      }
     } else if (n.type === 'HiSpeed') {
-      const h = n as HiSpeed
       c = {
         type: 'HiSpeed',
-        beat: h.beat,
-        lane: 0,
-        size: 0,
-        speed: h.speed,
-      } as HiSpeed
+        beat: n.beat,
+        speed: n.speed,
+        isEvent: true,
+      }
     } else if (n.type === 'TimeSignature') {
-      const t = n as TimeSignature
       c = {
         type: 'TimeSignature',
-        beat: t.beat,
-        lane: 0,
-        size: 0,
-        top: t.top,
-        bottom: t.bottom,
-      } as TimeSignature
+        beat: n.beat,
+        top: n.top,
+        bottom: n.bottom,
+        isEvent: true,
+      }
     } else {
       // fallback shallow clone for unknown types
       c = JSON.parse(JSON.stringify(n))
@@ -828,6 +955,8 @@ export const copy = () => {
 }
 
 export const cut = () => {
+  if (isPreviewing) return
+
   copy()
   deleteSelected()
 }
@@ -840,16 +969,44 @@ export const hideHiSpeedPanel = () => (hiSpeedPanelShown = false)
 export const hideBPMChangePanel = () => (bpmChangePanelShown = false)
 export const hideTimeSignaturePanel = () => (TimeSignaturePanelShown = false)
 
-const sortHold = (baseNote: HoldStart | HoldTick | HoldEnd) => {
-  let prevStart: HoldStart | null = null
-  let prevEnd: HoldEnd | null = null
+// Helper function to cache holdStart and holdEnd references on all nodes in a hold chain
+const cacheHoldChainReferences = (baseNote: SolidNote) => {
+  // Find the start of the chain
+  let start = baseNote
+  while ('prevNode' in start && start.prevNode) {
+    start = start.prevNode
+  }
+
+  // Find the end of the chain
+  let end = baseNote
+  while ('nextNode' in end && end.nextNode) {
+    end = end.nextNode
+  }
+
+  const holdStart = start
+  const holdEnd = end
+
+  // Cache references on all nodes in the chain
+  let current: any = start
+  while (true) {
+    current.holdStart = holdStart
+    current.holdEnd = holdEnd
+
+    if (!('nextNode' in current) || !current.nextNode) break
+    current = current.nextNode
+  }
+}
+
+const sortHold = (baseNote: SolidNote) => {
+  let prevStart: SolidNote | null = null
+  let prevEnd: SolidNote | null = null
 
   const allNotes: Note[] = [baseNote]
   if (baseNote.type === 'HoldStart') prevStart = baseNote
   if (baseNote.type === 'HoldEnd') prevEnd = baseNote
 
   if ('prevNode' in baseNote) {
-    let pN: HoldStart | HoldTick | HoldEnd = baseNote
+    let pN: SolidNote = baseNote
     while ('prevNode' in pN) {
       pN = pN.prevNode
       allNotes.push(pN)
@@ -858,7 +1015,7 @@ const sortHold = (baseNote: HoldStart | HoldTick | HoldEnd) => {
     }
   }
   if ('nextNode' in baseNote) {
-    let nN: HoldStart | HoldTick | HoldEnd = baseNote
+    let nN: SolidNote = baseNote
     while ('nextNode' in nN) {
       nN = nN.nextNode
       allNotes.push(nN)
@@ -870,47 +1027,47 @@ const sortHold = (baseNote: HoldStart | HoldTick | HoldEnd) => {
   allNotes.sort((n1, n2) => n1.beat - n2.beat)
 
   for (let i = 0; i < allNotes.length; i++) {
-    let n = allNotes[i] as HoldStart | HoldEnd | HoldTick
+    let n: any = allNotes[i]
     // console.log(i, n.beat)
 
     if (i === 0) {
-      n = n as HoldStart
       n.type = 'HoldStart'
-      delete (n as any).prevNode
+      delete n.prevNode
 
       n.isHidden = prevStart?.isHidden ?? false
       n.isGold = prevStart!.isGold
       n.isGuide = prevStart!.isGuide
 
-      if (!('easingType' in (n as any))) n.easingType = EasingType.Linear
+      if (!('easingType' in n)) n.easingType = EasingType.Linear
     } else if (i === allNotes.length - 1) {
-      n = n as HoldEnd
       n.type = 'HoldEnd'
-      delete (n as any).nextNode
+      delete n.nextNode
 
       n.isHidden = prevEnd?.isHidden ?? false
 
-      n.prevNode = allNotes[i - 1] as any
+      n.prevNode = allNotes[i - 1]
       n.prevNode.nextNode = n
       n.flickDir = prevEnd!.flickDir
       if (n.flickDir === FlickDirection.None) {
         n.isGold = prevStart!.isGold
       }
     } else {
-      n = n as HoldTick
       n.type = 'HoldTick'
 
       n.isGold = prevStart!.isGold
       n.isGuide = prevStart!.isGuide
 
-      n.prevNode = allNotes[i - 1] as any
+      n.prevNode = allNotes[i - 1]
       n.prevNode.nextNode = n
-      if (!('easingType' in (n as any))) n.easingType = EasingType.Linear
-      if (!('tickType' in (n as any))) n.tickType = TickType.Normal
+      if (!('easingType' in n)) n.easingType = EasingType.Linear
+      if (!('tickType' in n)) n.tickType = TickType.Normal
 
       if (n.isGuide) n.tickType = TickType.Hidden
     }
   }
+
+  // Cache holdStart and holdEnd references after sorting
+  cacheHoldChainReferences(baseNote)
 }
 
 const toggleIsPlaying = () => {
@@ -960,14 +1117,23 @@ document.addEventListener('mousedown', () => (mouseIsPressed = true))
 document.addEventListener('mouseup', () => (mouseIsPressed = false))
 
 document.addEventListener('wheel', (e) => {
+  if (mouseX === null || mouseY === null) return
+
   // e.preventDefault()
-  yOffset -= e.deltaY
+  if (isPreviewing) {
+    cursorPos -=
+      ((e.deltaY * getBPM(cursorPos)) / 10000) * (isShiftPressed ? 2.5 : 1)
+    cursorPos = Math.max(0, cursorPos)
+  } else {
+    yOffset -= e.deltaY * (isShiftPressed ? 2.5 : 1)
+  }
 })
 
 document.addEventListener('keydown', (e) => {
-  // if (e.key === 'Shift') {
-  //   isShiftPressed = true
-  // }
+  if (document.activeElement?.tagName === 'INPUT') return
+  if (e.key === 'Shift') {
+    isShiftPressed = true
+  }
 
   if (e.key === 'Control' || e.key === 'Meta') {
     isCtrlPressed = true
@@ -979,6 +1145,7 @@ document.addEventListener('keydown', (e) => {
 })
 
 document.addEventListener('keyup', (e) => {
+  if (document.activeElement?.tagName === 'INPUT') return
   if (e.key === 'Enter') {
     yOffset = -150
     cursorPos = 0
@@ -989,9 +1156,9 @@ document.addEventListener('keyup', (e) => {
     toggleIsPlaying()
   }
 
-  // if (e.key === 'Shift') {
-  //   isShiftPressed = false
-  // }
+  if (e.key === 'Shift') {
+    isShiftPressed = false
+  }
 
   if (e.key === 'Control' || e.key === 'Meta') {
     isCtrlPressed = false
@@ -1002,20 +1169,18 @@ document.addEventListener('keyup', (e) => {
   }
 })
 
-const getBPM = (beat: number) => {
-  return (
-    chartNotes
-      .filter((n) => n.type === 'BPMChange')
-      .filter((n) => n.beat <= beat)
-      .sort((a, b) => b.beat - a.beat)[0] as BPMChange
-  ).BPM
+export const getBPM = (beat: number) => {
+  return chartNotes
+    .filter((n) => n.type === 'BPMChange')
+    .filter((n) => n.beat <= beat)
+    .sort((a, b) => b.beat - a.beat)[0].BPM
 }
 
-const getTsig = (beat: number) => {
+export const getTsig = (beat: number) => {
   const tSig = chartNotes
     .filter((n) => n.type === 'TimeSignature')
     .filter((n) => n.beat <= beat)
-    .sort((a, b) => b.beat - a.beat)[0] as TimeSignature
+    .sort((a, b) => b.beat - a.beat)[0]
 
   return {
     top: tSig.top,
@@ -1023,11 +1188,11 @@ const getTsig = (beat: number) => {
   }
 }
 
-const getTime = (beat: number) => {
+export const getTime = (beat: number) => {
   let time = 0
   const changes = chartNotes.filter(
     (n) => n.type === 'BPMChange' && n.beat < beat,
-  )
+  ) as (Note & { type: 'BPMChange' })[]
 
   for (let i = 0; i < changes.length; i++) {
     let beats = 0
@@ -1038,14 +1203,64 @@ const getTime = (beat: number) => {
       beats = changes[i + 1].beat - changes[i].beat
     }
 
-    time += (beats * 60) / (changes[i] as BPMChange).BPM
+    time += (beats * 60) / changes[i].BPM
   }
 
   return time
 }
 
-const guideColor = '#38e584'
-const goldGuideColor = '#ffcd36'
+export const getScaledTime = (beat: number) => {
+  let time = 0
+  let currentBeat = 0
+  let speed = 1
+  let bpm = 160
+
+  // Get all BPM and HiSpeed changes up to the target beat, sorted by beat
+  const changes = chartNotes
+    .filter(
+      (n) => (n.type === 'BPMChange' || n.type === 'HiSpeed') && n.beat <= beat,
+    )
+    .sort((a, b) => a.beat - b.beat) as (Note & {
+    type: 'BPMChange' | 'HiSpeed'
+  })[]
+
+  for (const change of changes) {
+    // Calculate time for segment from currentBeat to this change's beat
+    if (change.beat > currentBeat) {
+      const segmentBeats = change.beat - currentBeat
+      time += (speed * (segmentBeats * 60)) / bpm
+    }
+
+    // Update current state based on the change type
+    if (change.type === 'HiSpeed') {
+      speed = change.speed
+    } else {
+      bpm = change.BPM
+    }
+
+    currentBeat = change.beat
+  }
+
+  // Calculate time for final segment from last change to target beat
+  if (beat > currentBeat) {
+    const segmentBeats = beat - currentBeat
+    time += (speed * (segmentBeats * 60)) / bpm
+  }
+
+  return time
+}
+
+export const getHiSpeed = (beat: number) => {
+  return (
+    chartNotes
+      .filter((n) => n.type === 'HiSpeed')
+      .filter((n) => n.beat <= beat)
+      .sort((a, b) => b.beat - a.beat)[0]?.speed || 1
+  )
+}
+
+export const guideColor = '#38e584'
+export const goldGuideColor = '#ffcd36'
 
 let lastTime: number
 const globalState: globalState = {
@@ -1054,10 +1269,16 @@ const globalState: globalState = {
   zoom: 1,
 }
 
-let width = 100,
+export let width = 100,
   height = 100
-export const setWidth = (w: number) => (width = w)
-export const setHeight = (h: number) => (height = h)
+export const setWidth = (w: number) => {
+  width = w
+  updateBox()
+}
+export const setHeight = (h: number) => {
+  height = h
+  updateBox()
+}
 
 export let ctx: CanvasRenderingContext2D | null = null
 
@@ -1071,17 +1292,16 @@ export const setGlobalState = (g: Partial<globalState>) => {
 const buildSegments = () => {
   const tsEvents = chartNotes
     .filter((n) => n.type === 'TimeSignature')
-    .sort((a, b) => a.beat - b.beat) as TimeSignature[]
+    .sort((a, b) => a.beat - b.beat)
 
   if (tsEvents.length === 0 || tsEvents[0].beat !== 0) {
     tsEvents.unshift({
+      isEvent: true,
       type: 'TimeSignature',
       beat: 0,
-      size: 0,
-      lane: 0,
       top: 4,
       bottom: 4,
-    } as TimeSignature)
+    })
   }
 
   const segs: { start: number; end: number; top: number; bottom: number }[] = []
@@ -1133,9 +1353,7 @@ const getNearestDivision = (beat: number): number => {
   return Math.round(beat * divisionsPerQuarter) / divisionsPerQuarter
 }
 
-const getEventSize = (
-  event: BPMChange | TimeSignature | HiSpeed,
-): { width: number; height: number } => {
+const getEventSize = (event: SolidEvent): { width: number; height: number } => {
   const fontSize = '24px'
   const fontFamily = 'Arial'
 
@@ -1143,12 +1361,19 @@ const getEventSize = (
   textEl.style.fontSize = fontSize
   textEl.style.fontFamily = fontFamily
   textEl.style.display = 'inline'
-  textEl.innerText =
-    event.type === 'HiSpeed'
-      ? `${(event as HiSpeed).speed}x`
-      : event.type === 'BPMChange'
-        ? `${(event as BPMChange).BPM} BPM`
-        : `${(event as TimeSignature).top}/${(event as TimeSignature).bottom}`
+  if (event.type === 'FeverChance') {
+    textEl.innerText = 'Fever Chance'
+  } else if (event.type === 'FeverStart') {
+    textEl.innerText = 'Fever Start'
+  } else if (event.type === 'Skill') {
+    textEl.innerText = 'Skill'
+  } else if (event.type === 'HiSpeed') {
+    textEl.innerText = `${event.speed}x`
+  } else if (event.type === 'BPMChange') {
+    textEl.innerText = `${event.BPM} BPM`
+  } else {
+    textEl.innerText = `${event.top}/${event.bottom}`
+  }
   document.body.appendChild(textEl)
   const { width: textWidth, height: textHeight } =
     textEl.getBoundingClientRect()
@@ -1163,23 +1388,27 @@ const computeEventOffsets = () => {
   // overlapping (vertically) events are nudged rightwards just enough to
   // avoid rectangle intersections. This runs once per draw and caches
   // results for use by hit-testing and rendering.
-  const eventTypes = ['BPMChange', 'TimeSignature', 'HiSpeed']
-  const events = chartNotes.filter((n) => eventTypes.includes(n.type)) as (
-    | BPMChange
-    | TimeSignature
-    | HiSpeed
-  )[]
+  const events = chartNotes.filter((n) => 'isEvent' in n) as SolidEvent[]
 
   const baseX = width / 2 + laneWidth * 6
   const spacing = 20
 
   // placed rects for already-placed events
-  const placed: {
+  const placedLeft: {
     top: number
     bottom: number
     left: number
     right: number
-    event: BPMChange | TimeSignature | HiSpeed
+    event: SolidEvent
+  }[] = []
+
+  // placed rects for already-placed events
+  const placedRight: {
+    top: number
+    bottom: number
+    left: number
+    right: number
+    event: SolidEvent
   }[] = []
 
   // Sort by beat ascending and by type priority for identical beats so
@@ -1192,6 +1421,9 @@ const computeEventOffsets = () => {
         BPMChange: 0,
         TimeSignature: 1,
         HiSpeed: 2,
+        FeverStart: 3,
+        FeverEnd: 4,
+        Skill: 5,
       }
       return (order[a.type] ?? 99) - (order[b.type] ?? 99)
     })
@@ -1203,7 +1435,14 @@ const computeEventOffsets = () => {
       // try offsets starting from `spacing` and push right until no conflicts
       let offset = spacing
       for (let maxIterations = 0; maxIterations < 120; maxIterations++) {
-        const left = baseX + offset
+        const isLeftSideEvent =
+          ev.type === 'FeverStart' ||
+          ev.type === 'FeverChance' ||
+          ev.type === 'Skill'
+        const placed = isLeftSideEvent ? placedLeft : placedRight
+        const left = isLeftSideEvent
+          ? width - (baseX + offset + size.width)
+          : baseX + offset
         const right = left + size.width
 
         // check conflicts with placed rects that vertically overlap
@@ -1233,8 +1472,9 @@ const computeEventOffsets = () => {
     })
 
   // convert to map for fast lookup
-  const map = new Map<BPMChange | TimeSignature | HiSpeed, number>()
-  for (const p of placed) map.set(p.event, p.left - baseX)
+  const map = new Map<SolidEvent, number>()
+  for (const p of placedLeft) map.set(p.event, p.left - baseX)
+  for (const p of placedRight) map.set(p.event, p.left - baseX)
   return map
 }
 
@@ -1242,7 +1482,7 @@ let _eventOffsetCache = computeEventOffsets()
 export const updateOffsetCache = () =>
   (_eventOffsetCache = computeEventOffsets())
 
-const getEventOffset = (event: BPMChange | TimeSignature | HiSpeed): number => {
+const getEventOffset = (event: SolidEvent): number => {
   return _eventOffsetCache.get(event) ?? 20
 }
 
@@ -1442,28 +1682,25 @@ const drawWaveform = () => {
   ctx.fill()
 }
 
-const getNoteImageName = (n: Note): string => {
+export const getNoteImageName = (n: Note): string => {
   let noteImageName = 'notes_2'
   if (n.type === 'HoldTick') return 'tick'
   else if (n.type === 'Tap') {
-    const note = n as TapNote
-
-    if (note.isTrace) {
-      if (note.isGold) noteImageName = 'notes_5'
-      else if (note.flickDir !== FlickDirection.None) noteImageName = 'notes_6'
+    if (n.isTrace) {
+      if (n.isGold) noteImageName = 'notes_5'
+      else if (n.flickDir !== FlickDirection.None) noteImageName = 'notes_6'
       else noteImageName = 'notes_4'
-    } else if (note.isGold) noteImageName = 'notes_0'
-    else if (note.flickDir !== FlickDirection.None) noteImageName = 'notes_3'
+    } else if (n.isGold) noteImageName = 'notes_0'
+    else if (n.flickDir !== FlickDirection.None) noteImageName = 'notes_3'
   } else if (n.type === 'HoldStart' || n.type === 'HoldEnd') {
-    const note = n as HoldStart | HoldEnd
-    if (note.isHidden) return 'hidden'
-    if (note.isTrace) {
-      if (note.isGold) noteImageName = 'notes_5'
-      else if (note.type === 'HoldEnd' && note.flickDir !== FlickDirection.None)
+    if (n.isHidden) return 'hidden'
+    if (n.isTrace) {
+      if (n.isGold) noteImageName = 'notes_5'
+      else if (n.type === 'HoldEnd' && n.flickDir !== FlickDirection.None)
         noteImageName = 'notes_6'
       else noteImageName = 'notes_4'
-    } else if (note.isGold) noteImageName = 'notes_0'
-    else if (note.type === 'HoldEnd' && note.flickDir !== FlickDirection.None)
+    } else if (n.isGold) noteImageName = 'notes_0'
+    else if (n.type === 'HoldEnd' && n.flickDir !== FlickDirection.None)
       noteImageName = 'notes_3'
     else noteImageName = 'notes_1'
   } else {
@@ -1476,114 +1713,222 @@ const getNoteImageName = (n: Note): string => {
 const drawNote = (n: Note) => {
   if (ctx === null) return
 
-  const { lane, beat, size } = n
+  const { beat } = n
 
   if (n.type === 'HiSpeed') {
-    const note = n as HiSpeed
     const y = beatToY(beat)
     const lanesEdge = width / 2 + 6 * laneWidth
 
-    const startX = getEventOffset(note)
+    const startX = getEventOffset(n)
 
     ctx.beginPath()
     ctx.moveTo(lanesEdge, y)
     ctx.lineTo(lanesEdge + startX + 4, y)
     ctx.strokeStyle = 'red'
     ctx.lineWidth = 4
-    if (selectedIndeces.has(chartNotes.indexOf(note)))
-      ctx.strokeStyle = '#ff4444'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#ff4444'
     ctx.stroke()
 
     const fontSize = '24px'
     const fontFamily = 'arial'
 
-    const { width: eventWidth, height: eventHeight } = getEventSize(note)
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
 
     ctx.beginPath()
     // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
     ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
     ctx.fillStyle = 'red'
-    if (selectedIndeces.has(chartNotes.indexOf(note))) ctx.fillStyle = '#ff4444'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#ff4444'
     ctx.fill()
 
     ctx.fillStyle = 'black'
     ctx.font = `${fontSize} ${fontFamily}`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
-    ctx.fillText(`${note.speed}x`, lanesEdge + startX + 8, y - 8)
+    ctx.fillText(`${n.speed}x`, lanesEdge + startX + 8, y - 8)
 
     return
   } else if (n.type === 'TimeSignature') {
-    const note = n as TimeSignature
     const y = beatToY(beat)
     const lanesEdge = width / 2 + 6 * laneWidth
 
-    const startX = getEventOffset(note)
+    const startX = getEventOffset(n)
 
     ctx.beginPath()
     ctx.moveTo(lanesEdge, y)
     ctx.lineTo(lanesEdge + startX + 4, y)
     ctx.strokeStyle = 'yellow'
     ctx.lineWidth = 4
-    if (selectedIndeces.has(chartNotes.indexOf(note)))
-      ctx.strokeStyle = '#ffff99'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#ffff99'
     ctx.stroke()
 
     const fontSize = '24px'
     const fontFamily = 'arial'
 
-    const { width: eventWidth, height: eventHeight } = getEventSize(note)
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
 
     ctx.beginPath()
     // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
     ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
     ctx.fillStyle = 'yellow'
-    if (selectedIndeces.has(chartNotes.indexOf(note))) ctx.fillStyle = '#ffff99'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#ffff99'
     ctx.fill()
 
     ctx.fillStyle = 'black'
     ctx.font = `${fontSize} ${fontFamily}`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
-    ctx.fillText(`${note.top}/${note.bottom}`, lanesEdge + startX + 8, y - 8)
+    ctx.fillText(`${n.top}/${n.bottom}`, lanesEdge + startX + 8, y - 8)
 
     return
   } else if (n.type === 'BPMChange') {
-    const note = n as BPMChange
     const y = beatToY(beat)
     const lanesEdge = width / 2 + 6 * laneWidth
 
-    const startX = getEventOffset(note)
+    const startX = getEventOffset(n)
 
     ctx.beginPath()
     ctx.moveTo(lanesEdge, y)
     ctx.lineTo(lanesEdge + startX + 4, y)
     ctx.strokeStyle = 'lime'
     ctx.lineWidth = 4
-    if (selectedIndeces.has(chartNotes.indexOf(note)))
-      ctx.strokeStyle = '#99ff99'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#99ff99'
     ctx.stroke()
 
     const fontSize = '24px'
     const fontFamily = 'arial'
 
-    const { width: eventWidth, height: eventHeight } = getEventSize(note)
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
 
     ctx.beginPath()
     // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
     ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
     ctx.fillStyle = 'lime'
-    if (selectedIndeces.has(chartNotes.indexOf(note))) ctx.fillStyle = '#99ff99'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#99ff99'
     ctx.fill()
 
     ctx.fillStyle = 'black'
     ctx.font = `${fontSize} ${fontFamily}`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
-    ctx.fillText(note.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
+    ctx.fillText(n.BPM.toString() + ' BPM', lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'FeverChance') {
+    const y = beatToY(beat)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    const startX = getEventOffset(n)
+
+    ctx.beginPath()
+    if (startX > width / 2) {
+      ctx.moveTo(lanesEdge, y)
+    } else {
+      ctx.moveTo(width - lanesEdge, y)
+    }
+    ctx.lineTo(lanesEdge + startX + 4, y)
+    ctx.strokeStyle = '#9966cc'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#bb88ee'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = '#9966cc'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#bb88ee'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('Fever Chance', lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'FeverStart') {
+    const y = beatToY(beat)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    const startX = getEventOffset(n)
+
+    ctx.beginPath()
+    if (startX > width / 2) {
+      ctx.moveTo(lanesEdge, y)
+    } else {
+      ctx.moveTo(width - lanesEdge, y)
+    }
+    ctx.lineTo(lanesEdge + startX + 4, y)
+    ctx.strokeStyle = '#9966cc'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#bb88ee'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = '#9966cc'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#bb88ee'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('Fever Start', lanesEdge + startX + 8, y - 8)
+
+    return
+  } else if (n.type === 'Skill') {
+    const y = beatToY(beat)
+
+    const startX = getEventOffset(n)
+    const lanesEdge = width / 2 + 6 * laneWidth
+
+    ctx.beginPath()
+    if (startX > width / 2) {
+      ctx.moveTo(lanesEdge, y)
+    } else {
+      ctx.moveTo(width - lanesEdge, y)
+    }
+    ctx.lineTo(lanesEdge + startX + 4, y)
+
+    ctx.strokeStyle = '#5577ff'
+    ctx.lineWidth = 4
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#7799ff'
+    ctx.stroke()
+
+    const fontSize = '24px'
+    const fontFamily = 'arial'
+
+    const { width: eventWidth, height: eventHeight } = getEventSize(n)
+
+    ctx.beginPath()
+    // ctx.fillRect(lanesEdge + 40, y + 2, 200, -40)
+    ctx.roundRect(lanesEdge + startX, y + 2, eventWidth, -eventHeight, 4)
+    ctx.fillStyle = '#5577ff'
+    if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.fillStyle = '#7799ff'
+    ctx.fill()
+
+    ctx.fillStyle = 'black'
+    ctx.font = `${fontSize} ${fontFamily}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('Skill', lanesEdge + startX + 8, y - 8)
 
     return
   }
+
+  const { lane, size } = n
 
   let aspectRatio = 4
 
@@ -1599,22 +1944,24 @@ const drawNote = (n: Note) => {
 
       ctx.lineWidth = 3
       ctx.strokeStyle = '#7fffd3'
-      if ((n as HoldTick).tickType === TickType.Skip) ctx.strokeStyle = 'cyan'
+      if (n.tickType === TickType.Skip) ctx.strokeStyle = 'cyan'
       ctx.stroke()
     }
   } else {
     const noteImageName = getNoteImageName(n)
-    if (noteImageName === 'none') return
-    else if (noteImageName === 'hidden') {
+    if (noteImageName === 'none') {
+      return
+    } else if (noteImageName === 'hidden') {
       ctx.beginPath()
       ctx.roundRect(x, y + 16, w, h - 32, 4)
 
       ctx.fillStyle = guideColor
-      if ((n as HoldStart).isGold) ctx.fillStyle = goldGuideColor
+      if (n.isGold) ctx.fillStyle = goldGuideColor
       ctx.strokeStyle = 'white'
       ctx.lineWidth = 3
       ctx.fill()
       ctx.stroke()
+
       return
     }
 
@@ -1678,21 +2025,13 @@ const drawNote = (n: Note) => {
     n.type === 'HoldEnd' ||
     n.type === 'HoldTick'
   ) {
-    let note: TapNote | HoldEnd
-    if (n.type === 'Tap') note = n as TapNote
-    else note = n as HoldEnd
-
     if (
-      note.isTrace ||
-      ((note as any).type === 'HoldTick' &&
-        (note as any).tickType !== TickType.Hidden)
+      (n.type !== 'HoldTick' && n.isTrace) ||
+      (n.type === 'HoldTick' && n.tickType !== TickType.Hidden)
     ) {
       let traceSpriteName = 'notes_friction_among_'
-      if (note.isGold) traceSpriteName += 'crtcl'
-      else if (
-        !['HoldStart', 'HoldTick'].includes((note as any).type) &&
-        note.flickDir !== FlickDirection.None
-      )
+      if (n.isGold) traceSpriteName += 'crtcl'
+      else if ('flickDir' in n && n.flickDir !== FlickDirection.None)
         traceSpriteName += 'flick'
       else traceSpriteName += 'long'
 
@@ -1702,11 +2041,7 @@ const drawNote = (n: Note) => {
       const th = (1.75 * traceRect.h) / aspectRatio
       let tx = (width - tw) / 2 + lane * 2 * laneWidth
 
-      if (
-        (note as any).type === 'HoldTick' &&
-        (note as any).tickType === TickType.Skip
-      ) {
-        const n = note as any as HoldTick
+      if (n.type === 'HoldTick' && n.tickType === TickType.Skip) {
         let pN = n.prevNode
         let nN = n.nextNode
 
@@ -1745,7 +2080,7 @@ const drawNote = (n: Note) => {
   }
 }
 
-const drawFlickArrow = (n: Note) => {
+const drawFlickArrow = (n: SolidNote) => {
   if (ctx === null) return
 
   const { lane, beat } = n
@@ -1753,22 +2088,20 @@ const drawFlickArrow = (n: Note) => {
   const noteImageName = getNoteImageName(n)
 
   const rect = getRect(noteImageName)!
-  if (['none', 'tick', 'hidden'].includes(noteImageName)) return
+  if (['none', 'tick', 'hidden'].includes(noteImageName)) {
+    return
+  }
 
   const aspectRatio = rect.h / NOTE_HEIGHT
 
   const y = beatToY(beat) - NOTE_HEIGHT / 2
 
   if (n.type === 'Tap' || n.type === 'HoldEnd') {
-    let note: TapNote | HoldEnd
-    if (n.type === 'Tap') note = n as TapNote
-    else note = n as HoldEnd
-    if (note.flickDir !== FlickDirection.None) {
+    if (n.flickDir !== FlickDirection.None) {
       let flickSpriteName = 'notes_flick_arrow_'
-      if (note.isGold) flickSpriteName += 'crtcl_'
+      if (n.isGold) flickSpriteName += 'crtcl_'
       flickSpriteName += '0' + Math.min(6, n.size * 2)
-      if (note.flickDir !== FlickDirection.Default)
-        flickSpriteName += '_diagonal'
+      if (n.flickDir !== FlickDirection.Default) flickSpriteName += '_diagonal'
 
       const flickRect = getRect(flickSpriteName)!
 
@@ -1777,7 +2110,7 @@ const drawFlickArrow = (n: Note) => {
       let fx = (width - fw) / 2 + lane * 2 * laneWidth
       const fy = y - fh
 
-      if (note.flickDir === FlickDirection.Right) {
+      if (n.flickDir === FlickDirection.Right) {
         ctx.scale(-1, 1)
         fw *= -1
         fx *= -1
@@ -1795,14 +2128,13 @@ const drawFlickArrow = (n: Note) => {
         fh,
       )
 
-      if (note.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
+      if (n.flickDir === FlickDirection.Right) ctx.scale(-1, 1)
     }
   }
 }
 
-const drawSelectionOutline = (n: Note) => {
+const drawSelectionOutline = (n: SolidNote) => {
   if (ctx === null) return
-  if (['HiSpeed', 'TimeSignature', 'BPMChange'].includes(n.type)) return
 
   const selectionOutlinePadding = 8
 
@@ -1821,21 +2153,19 @@ const drawSelectionOutline = (n: Note) => {
   ctx.stroke()
 }
 
-const drawHoldLine = (n: Note) => {
+const drawHoldLine = (n: Note & { type: 'HoldStart' | 'HoldTick' }) => {
   if (ctx === null) return
-  const note = n as HoldStart | HoldTick
-  let nextNote = note.nextNode
+  let nextNote = n.nextNode
 
-  if (note.type === 'HoldTick' && (note as HoldTick).tickType === TickType.Skip)
-    return
+  if (n.type === 'HoldTick' && n.tickType === TickType.Skip) return
 
   while ('nextNode' in nextNote && nextNote.tickType === TickType.Skip) {
     nextNote = nextNote.nextNode
   }
 
-  const startX = width / 2 + (note.lane - note.size / 2) * 2 * laneWidth
-  const startW = note.size * 2 * laneWidth
-  const startY = beatToY(note.beat)
+  const startX = width / 2 + (n.lane - n.size / 2) * 2 * laneWidth
+  const startW = n.size * 2 * laneWidth
+  const startY = beatToY(n.beat)
 
   const endX = width / 2 + (nextNote.lane - nextNote.size / 2) * 2 * laneWidth
   const endW = nextNote.size * 2 * laneWidth
@@ -1844,95 +2174,54 @@ const drawHoldLine = (n: Note) => {
   ctx.beginPath()
   ctx.moveTo(startX, startY)
   ctx.lineTo(startX + startW, startY)
-  if (note.easingType === EasingType.EaseIn)
+  if (n.easingType === EasingType.EaseIn)
     ctx.quadraticCurveTo(
       startX + startW,
       (startY + endY) / 2,
       endX + endW,
       endY,
     )
-  else if (note.easingType === EasingType.EaseOut)
+  else if (n.easingType === EasingType.EaseOut)
     ctx.quadraticCurveTo(endX + endW, (startY + endY) / 2, endX + endW, endY)
-  else if (note.easingType === EasingType.EaseInOut) {
-    ctx.quadraticCurveTo(
-      startX + startW,
-      (startY + (startY + endY) / 2) / 2,
-      (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      endX + endW,
-      ((startY + endY) / 2 + endY) / 2,
-      endX + endW,
-      endY,
-    )
-  } else if (note.easingType === EasingType.EaseOutIn) {
-    ctx.quadraticCurveTo(
-      (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + (startY + endY) / 2) / 2,
-      (startX + endX) / 2 + (startW + endW) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      (startX + endX) / 2 + (startW + endW) / 2,
-      ((startY + endY) / 2 + endY) / 2,
-      endX + endW,
-      endY,
-    )
-  } else ctx.lineTo(endX + endW, endY)
+  else ctx.lineTo(endX + endW, endY)
 
   ctx.lineTo(endX, endY)
-  if (note.easingType === EasingType.EaseIn)
+  if (n.easingType === EasingType.EaseIn)
     ctx.quadraticCurveTo(startX, (startY + endY) / 2, startX, startY)
-  else if (note.easingType === EasingType.EaseOut)
+  else if (n.easingType === EasingType.EaseOut)
     ctx.quadraticCurveTo(endX, (startY + endY) / 2, startX, startY)
-  else if (note.easingType === EasingType.EaseInOut) {
-    ctx.quadraticCurveTo(
-      endX,
-      ((startY + endY) / 2 + endY) / 2,
-      (startX + endX) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      startX,
-      (startY + (endY + startY) / 2) / 2,
-      startX,
-      startY,
-    )
-  } else if (note.easingType === EasingType.EaseOutIn) {
-    ctx.quadraticCurveTo(
-      (startX + endX) / 2,
-      ((startY + endY) / 2 + endY) / 2,
-      (startX + endX) / 2,
-      (startY + endY) / 2,
-    )
-    ctx.quadraticCurveTo(
-      (endX + startX) / 2,
-      (startY + (endY + startY) / 2) / 2,
-      startX,
-      startY,
-    )
-  } else ctx.lineTo(startX, startY)
+  else ctx.lineTo(startX, startY)
 
-  if (note.isGuide) {
-    let pN = note as HoldStart | HoldTick | HoldEnd
-    while (pN.type !== 'HoldStart') pN = pN.prevNode
-    let nN = note as HoldEnd | HoldTick | HoldEnd
-    while (nN.type !== 'HoldEnd') nN = nN.nextNode
+  if (n.isGuide) {
+    // Use cached references if available, otherwise traverse
+    const pN =
+      n.holdStart ||
+      (() => {
+        let n2 = n
+        while (n2.type !== 'HoldStart') n2 = n2.prevNode
+        return n2
+      })()
+    const nN =
+      n.holdEnd ||
+      (() => {
+        let n2: Note & { type: 'HoldEnd' | 'HoldTick' | 'HoldStart' } = n
+        while (n2.type !== 'HoldEnd') n2 = n2.nextNode
+        return n2
+      })()
     const gY0 = beatToY(pN.beat)
     const gY1 = beatToY(nN.beat)
     const guideGradient = ctx.createLinearGradient(0, gY0, 0, gY1)
     guideGradient.addColorStop(
       0,
-      (note.isGold ? goldGuideColor : guideColor) + 'bb',
+      (n.isGold ? goldGuideColor : guideColor) + 'bb',
     )
     guideGradient.addColorStop(
       1,
-      (note.isGold ? goldGuideColor : guideColor) + '33',
+      (n.isGold ? goldGuideColor : guideColor) + '33',
     )
     ctx.fillStyle = guideGradient
   } else {
-    if (note.isGold) ctx.fillStyle = '#fbffdcaa'
+    if (n.isGold) ctx.fillStyle = '#fbffdcaa'
     else ctx.fillStyle = '#7fffd3aa'
   }
   ctx.fill()
@@ -1942,6 +2231,8 @@ const TICKS_PER_BEAT = 480
 const TICK_SIZE = 1 / TICKS_PER_BEAT
 
 export const shrinkSelectedUp = () => {
+  if (isPreviewing) return
+
   saveHistory()
   if (selectedIndeces.size <= 0) return
 
@@ -1954,6 +2245,8 @@ export const shrinkSelectedUp = () => {
 }
 
 export const shrinkSelectedDown = () => {
+  if (isPreviewing) return
+
   saveHistory()
   if (selectedIndeces.size <= 0) return
 
@@ -1966,19 +2259,21 @@ export const shrinkSelectedDown = () => {
 }
 
 export const splitHold = () => {
+  if (isPreviewing) return
+
   const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
   if (selection.length !== 1) return
-  const note = selection[0] as HoldTick
+  const note = selection[0]
   if (note.type !== 'HoldTick') return
 
   saveHistory()
-  let prev: HoldTick | HoldStart = note.prevNode
+  let prev = note.prevNode
   const beforeNotes = [prev]
   while ('prevNode' in prev && prev.type === 'HoldTick') {
     prev = prev.prevNode
     beforeNotes.push(prev)
   }
-  let next: HoldTick | HoldEnd = note.nextNode
+  let next = note.nextNode
   const afterNotes = [next]
   while ('nextNode' in next) {
     next = next.nextNode
@@ -1986,7 +2281,7 @@ export const splitHold = () => {
   }
 
   const oldStart = beforeNotes.filter((x) => x.type === 'HoldStart')[0]
-  const newStart = { ...oldStart } as HoldStart
+  const newStart = { ...oldStart }
   newStart.beat = note.beat
   newStart.lane = note.lane
   newStart.size = note.size
@@ -1995,7 +2290,7 @@ export const splitHold = () => {
   newStart.nextNode.prevNode = newStart
 
   const oldEnd = afterNotes.filter((x) => x.type === 'HoldEnd')[0]
-  const newEnd = { ...oldEnd } as HoldEnd
+  const newEnd = { ...oldEnd }
   newEnd.beat = note.beat
   newEnd.lane = note.lane
   newEnd.size = note.size
@@ -2008,23 +2303,29 @@ export const splitHold = () => {
   chartNotes.push(newStart, newEnd)
 
   selectedIndeces.clear()
+
+  // Cache holdStart and holdEnd references for both new chains
+  cacheHoldChainReferences(newStart)
+  cacheHoldChainReferences(newEnd)
 }
 
 export const connectHolds = () => {
+  if (isPreviewing) return
+
   const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
   if (selection.length !== 2) return
   if (selection.filter((x) => x.type === 'HoldStart').length !== 1) return
   if (selection.filter((x) => x.type === 'HoldEnd').length !== 1) return
 
-  const start = selection.filter((x) => x.type === 'HoldStart')[0] as HoldStart
-  const end = selection.filter((x) => x.type === 'HoldEnd')[0] as HoldEnd
+  const start = selection.filter((x) => x.type === 'HoldStart')[0]
+  const end = selection.filter((x) => x.type === 'HoldEnd')[0]
 
   if (start.isGold !== end.prevNode.isGold) return
   if (start.isGuide !== end.prevNode.isGuide) return
 
   saveHistory()
 
-  const newStartTick = {
+  const newStartTick: any = {
     beat: start.beat,
     lane: start.lane,
     size: start.size,
@@ -2034,8 +2335,8 @@ export const connectHolds = () => {
     nextNode: start.nextNode,
     type: 'HoldTick',
     tickType: TickType.Normal,
-  } as HoldTick
-  const newEndTick = {
+  }
+  const newEndTick: any = {
     beat: end.beat,
     lane: end.lane,
     size: end.size,
@@ -2046,7 +2347,7 @@ export const connectHolds = () => {
     nextNode: newStartTick,
     type: 'HoldTick',
     tickType: TickType.Normal,
-  } as HoldTick
+  }
 
   newStartTick.prevNode = newEndTick
   start.nextNode.prevNode = newStartTick
@@ -2062,9 +2363,12 @@ export const connectHolds = () => {
   selectedIndeces.clear()
 
   sortHold(newStartTick)
+  // sortHold already calls cacheHoldChainReferences
 }
 
 export const repeatHoldMids = () => {
+  if (isPreviewing) return
+
   const selection = chartNotes.filter((_, i) => selectedIndeces.has(i))
   if (selection.length < 3) return
   if (
@@ -2079,8 +2383,12 @@ export const repeatHoldMids = () => {
 
   selection.sort((a, b) => a.beat - b.beat)
 
-  const patternStart = selection[0] as HoldStart | HoldTick
-  const patternEnd = selection[selection.length - 1] as HoldTick
+  const patternStart = selection[0] as Note & {
+    type: 'HoldStart' | 'HoldTick'
+  }
+  const patternEnd = selection[selection.length - 1] as Note & {
+    type: 'HoldTick'
+  }
 
   selectedIndeces.clear()
 
@@ -2089,7 +2397,7 @@ export const repeatHoldMids = () => {
     deleteSelected()
   }
 
-  const holdEnd = patternEnd.nextNode as HoldEnd
+  const holdEnd = patternEnd.nextNode
 
   const patternHeight = patternEnd.beat - patternStart.beat
   const itterations = Math.floor(
@@ -2098,11 +2406,13 @@ export const repeatHoldMids = () => {
 
   patternEnd.easingType = patternStart.easingType
 
-  let prev = patternEnd as HoldTick
+  let prev = patternEnd
 
   for (let i = 0; i <= itterations; i++) {
     for (let j = 1; j < selection.length; j++) {
-      const currentRep = selection[j] as HoldStart | HoldTick
+      const currentRep = selection[j] as Note & {
+        type: 'HoldStart' | 'HoldTick'
+      }
 
       const lane = Math.min(
         Math.max(
@@ -2121,7 +2431,7 @@ export const repeatHoldMids = () => {
         continue
       }
 
-      const nextMid = {
+      const nextMid: any = {
         type: 'HoldTick',
         beat: currentRep.beat + patternHeight * i,
         lane,
@@ -2130,7 +2440,7 @@ export const repeatHoldMids = () => {
         prevNode: prev,
         tickType:
           'tickType' in currentRep ? currentRep.tickType : TickType.Normal,
-      } as HoldTick
+      }
 
       prev.nextNode = nextMid
       prev = nextMid
@@ -2143,12 +2453,18 @@ export const repeatHoldMids = () => {
   }
 
   sortHold(holdEnd)
+  // sortHold already calls cacheHoldChainReferences
 }
 
 const draw = (timeStamp: number) => {
   if (ctx === null) return
   if (lastTime == undefined) lastTime = timeStamp
   const deltaTime = timeStamp - lastTime
+
+  ctx.resetTransform()
+  ctx.scale(2 / devicePixelRatio, 2 / devicePixelRatio)
+
+  if (hasCachedScaledTimes) disableCachedScaledTimes()
 
   // build tsig segments
   const segments = buildSegments()
@@ -2169,36 +2485,47 @@ const draw = (timeStamp: number) => {
       if (
         dragMode === DragMode.Move &&
         chartNotes.filter(
-          (n, i) => selectedIndeces.has(i) && n.lane - n.size / 2 <= -2.75,
+          (n, i) =>
+            selectedIndeces.has(i) &&
+            'lane' in n &&
+            n.lane - n.size / 2 <= -2.75,
         ).length === 0
       )
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
-          .forEach((n) => (n.lane -= 0.5))
+          .forEach((n) => {
+            if ('lane' in n) n.lane -= 0.5
+          })
       else if (
         dragMode === DragMode.ScaleLeft &&
         chartNotes.filter(
           (n, i) =>
             selectedIndeces.has(i) &&
+            'lane' in n &&
             (n.size > 5.5 || n.lane - n.size / 2 <= -3),
         ).length === 0
       )
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
           .forEach((n) => {
-            n.lane -= 0.25
-            n.size += 0.5
+            if ('lane' in n) {
+              n.lane -= 0.25
+              n.size += 0.5
+            }
           })
       else if (
         dragMode === DragMode.ScaleRight &&
-        chartNotes.filter((n, i) => selectedIndeces.has(i) && n.size <= 0.5)
-          .length === 0
+        chartNotes.filter(
+          (n, i) => selectedIndeces.has(i) && 'size' in n && n.size <= 0.5,
+        ).length === 0
       )
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
           .forEach((n) => {
-            n.lane -= 0.25
-            n.size -= 0.5
+            if ('lane' in n) {
+              n.lane -= 0.25
+              n.size -= 0.5
+            }
           })
       else dragStartX += laneWidth
     } else if (xOff < -laneWidth / 2) {
@@ -2207,36 +2534,49 @@ const draw = (timeStamp: number) => {
       if (
         dragMode === DragMode.Move &&
         chartNotes.filter(
-          (n, i) => selectedIndeces.has(i) && n.lane + n.size / 2 >= 2.75,
+          (n, i) =>
+            selectedIndeces.has(i) &&
+            'lane' in n &&
+            n.lane + n.size / 2 >= 2.75,
         ).length === 0
       )
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
-          .forEach((n) => (n.lane += 0.5))
+          .forEach((n) => {
+            if ('lane' in n) {
+              n.lane += 0.5
+            }
+          })
       else if (
         dragMode === DragMode.ScaleLeft &&
-        chartNotes.filter((n, i) => selectedIndeces.has(i) && n.size <= 0.5)
-          .length === 0
+        chartNotes.filter(
+          (n, i) => selectedIndeces.has(i) && 'size' in n && n.size <= 0.5,
+        ).length === 0
       )
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
           .forEach((n) => {
-            n.lane += 0.25
-            n.size -= 0.5
+            if ('lane' in n) {
+              n.lane += 0.25
+              n.size -= 0.5
+            }
           })
       else if (
         dragMode === DragMode.ScaleRight &&
         chartNotes.filter(
           (n, i) =>
             selectedIndeces.has(i) &&
+            'size' in n &&
             (n.size > 5.5 || n.lane + n.size / 2 >= 3),
         ).length === 0
       )
         chartNotes
           .filter((_, i) => selectedIndeces.has(i))
           .forEach((n) => {
-            n.lane += 0.25
-            n.size += 0.5
+            if ('lane' in n) {
+              n.lane += 0.25
+              n.size += 0.5
+            }
           })
       else dragStartX -= laneWidth
     }
@@ -2287,10 +2627,20 @@ const draw = (timeStamp: number) => {
       const rawLaneOffset = getLaneFromMouse(mouseX!)
 
       const groupLeft = Math.min(
-        ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2),
+        ...clipboard.map((n) => {
+          if ('lane' in n) {
+            return n.lane - (n.size ?? 1) / 2
+          }
+          return 0
+        }),
       )
       const groupRight = Math.max(
-        ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
+        ...clipboard.map((n) => {
+          if ('lane' in n) {
+            return n.lane + (n.size ?? 1) / 2
+          }
+          return 0
+        }),
       )
       let groupCenter = (groupLeft + groupRight) / 2
       groupCenter = Math.floor(groupCenter * 2) / 2
@@ -2298,8 +2648,8 @@ const draw = (timeStamp: number) => {
 
       const allowedLows: number[] = []
       const allowedHighs: number[] = []
-      for (const n of clipboard) {
-        const size = (n as Note).size ?? 1
+      for (const n of clipboard as SolidNote[]) {
+        const size = n.size ?? 1
         const minLane = -3 + size / 2
         const maxLane = 3 - size / 2
         allowedLows.push(minLane - (n.lane ?? 0))
@@ -2326,7 +2676,9 @@ const draw = (timeStamp: number) => {
       const adjusted: Note[] = clipboard.map((n) => {
         const copy: Note = { ...n }
         copy.beat = (n.beat ?? 0) + beatOffset
-        copy.lane = (n.lane ?? 0) + laneOffset
+        if ('lane' in n && 'lane' in copy) {
+          copy.lane = (n.lane ?? 0) + laneOffset
+        }
         adjustedMap.set(n, copy)
         return copy
       })
@@ -2355,6 +2707,30 @@ const draw = (timeStamp: number) => {
       for (let i = 0; i < adjusted.length; i++)
         selectedIndeces.add(startIndex + i)
 
+      // Cache holdStart and holdEnd references for pasted hold chains
+      const processedHolds = new Set<SolidNote>()
+      adjusted.forEach((n) => {
+        if (
+          (n.type === 'HoldStart' ||
+            n.type === 'HoldTick' ||
+            n.type === 'HoldEnd') &&
+          !processedHolds.has(n)
+        ) {
+          cacheHoldChainReferences(n)
+
+          // Mark all nodes in this chain as processed
+          let current = n
+          while ('prevNode' in current && current.prevNode) {
+            current = current.prevNode
+          }
+          while (true) {
+            processedHolds.add(current)
+            if (!('nextNode' in current) || !current.nextNode) break
+            current = current.nextNode
+          }
+        }
+      })
+
       isPasting = false
 
       _eventOffsetCache = computeEventOffsets()
@@ -2365,12 +2741,9 @@ const draw = (timeStamp: number) => {
     // Filter notes by pixel distance (max 20px in y-direction) and x-position within note bounds
     const candidateNotes = chartNotes
       .map((n, index) => {
-        if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
-          const o =
-            width / 2 +
-            laneWidth * 6 +
-            getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
-          const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
+        if ('isEvent' in n) {
+          const o = width / 2 + laneWidth * 6 + getEventOffset(n as SolidEvent)
+          const s = getEventSize(n as SolidEvent)
           const b = beatToY(n.beat)
 
           // Check if mouse is within the event bounds
@@ -2403,7 +2776,7 @@ const draw = (timeStamp: number) => {
         return null
       })
       .filter(
-        (item): item is { note: Note; index: number; distance: number } =>
+        (item): item is { note: SolidNote; index: number; distance: number } =>
           item !== null,
       )
       .sort((a, b) => a.distance - b.distance) // Sort by distance, closest first
@@ -2459,7 +2832,11 @@ const draw = (timeStamp: number) => {
       }
     }
 
-    if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(globalState.selectedTool)) {
+    if (
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(
+        globalState.selectedTool,
+      )
+    ) {
       if (
         notesAtPos.length > 0 &&
         ![8, 9, 10].includes(globalState.selectedTool)
@@ -2484,20 +2861,16 @@ const draw = (timeStamp: number) => {
 
         selectedIndeces.forEach((i) => {
           if (globalState.selectedTool === 2) {
-            const note = chartNotes[i] as HoldStart | HoldTick
+            const note = chartNotes[i]
             if (note.type !== 'HoldStart' && note.type !== 'HoldTick') return
 
             if (note.easingType === EasingType.Linear)
               note.easingType = EasingType.EaseIn
             else if (note.easingType === EasingType.EaseIn)
               note.easingType = EasingType.EaseOut
-            else if (note.easingType === EasingType.EaseOut)
-              note.easingType = EasingType.EaseInOut
-            else if (note.easingType === EasingType.EaseInOut)
-              note.easingType = EasingType.EaseOutIn
             else note.easingType = EasingType.Linear
           } else if (globalState.selectedTool === 3) {
-            const note = chartNotes[i] as HoldTick
+            const note = chartNotes[i]
             if (note.type !== 'HoldTick') return
 
             if (note.isGuide) {
@@ -2513,20 +2886,21 @@ const draw = (timeStamp: number) => {
               note.tickType = TickType.Normal
           }
 
-          const note = chartNotes[i] as TapNote
+          const note = chartNotes[i]
 
           saveHistory()
 
           if (globalState.selectedTool === 5) {
-            if ((note as Note).type !== 'HoldTick') {
+            if (note.type !== 'HoldTick') {
               if (
-                (note as Note).type !== 'HoldEnd' ||
-                (note as Note as HoldEnd).flickDir !== FlickDirection.None
+                (note.type !== 'HoldEnd' ||
+                  note.flickDir !== FlickDirection.None) &&
+                'isGold' in note
               ) {
                 const newGoldStatus = !note.isGold
                 note.isGold = newGoldStatus
                 if ((note as Note).type === 'HoldStart') {
-                  let n = chartNotes[i] as HoldStart | HoldTick | HoldEnd
+                  let n = chartNotes[i]
 
                   while ('nextNode' in n) {
                     n.nextNode.isGold = newGoldStatus
@@ -2536,10 +2910,11 @@ const draw = (timeStamp: number) => {
               }
             }
           }
-          if (globalState.selectedTool === 6) note.isTrace = !note.isTrace
+          if (globalState.selectedTool === 6 && 'isTrace' in note)
+            note.isTrace = !note.isTrace
 
           if (globalState.selectedTool === 4) {
-            if (!['HoldStart', 'HoldTick'].includes(note.type)) {
+            if ('flickDir' in note) {
               const current = note.flickDir
 
               if (current === FlickDirection.None)
@@ -2551,9 +2926,8 @@ const draw = (timeStamp: number) => {
               else if (current === FlickDirection.Right) {
                 note.flickDir = FlickDirection.None
 
-                if ((note as Note).type === 'HoldEnd') {
-                  const n = note as Note as HoldEnd
-                  note.isGold = n.prevNode.isGold
+                if (note.type === 'HoldEnd') {
+                  note.isGold = note.prevNode.isGold
                 }
               }
             }
@@ -2580,13 +2954,12 @@ const draw = (timeStamp: number) => {
             ).length === 0
           ) {
             saveHistory()
-            const newNote = {
+            const newNote: Note = {
               beat: nearestBeat,
-              lane: 0,
-              size: 0,
               type: 'BPMChange',
               BPM: 160,
-            } as BPMChange
+              isEvent: true,
+            }
 
             chartNotes.push(newNote)
             _eventOffsetCache = computeEventOffsets()
@@ -2598,14 +2971,13 @@ const draw = (timeStamp: number) => {
             ).length === 0
           ) {
             saveHistory()
-            const newNote = {
+            const newNote: Note = {
               beat: nearestBeat,
-              lane: 0,
-              size: 0,
               type: 'TimeSignature',
               top: 4,
               bottom: 4,
-            } as TimeSignature
+              isEvent: true,
+            }
 
             chartNotes.push(newNote)
             _eventOffsetCache = computeEventOffsets()
@@ -2617,23 +2989,68 @@ const draw = (timeStamp: number) => {
             ).length === 0
           ) {
             saveHistory()
-            const newNote = {
+            const newNote: Note = {
               beat: nearestBeat,
-              lane: 0,
-              size: 0,
               type: 'HiSpeed',
               speed: 1,
-            } as HiSpeed
+              isEvent: true,
+            }
 
             chartNotes.push(newNote)
             _eventOffsetCache = computeEventOffsets()
+            disableCachedScaledTimes()
+          }
+        } else if (globalState.selectedTool === 11) {
+          if (
+            chartNotes.filter(
+              (n) =>
+                n.type === 'FeverStart' ||
+                (n.type === 'Skill' && n.beat === nearestBeat),
+            ).length === 0
+          ) {
+            saveHistory()
+            const newStartNote: Note = {
+              beat: nearestBeat,
+              type: 'FeverChance',
+              isEvent: true,
+            }
+            const newEndNote: Note = {
+              beat:
+                nearestBeat +
+                getTsig(nearestBeat).bottom / globalState.division,
+              type: 'FeverStart',
+              isEvent: true,
+            }
+
+            chartNotes.push(newStartNote, newEndNote)
+            _eventOffsetCache = computeEventOffsets()
+            disableCachedScaledTimes()
+          }
+        } else if (globalState.selectedTool === 12) {
+          if (
+            chartNotes.filter(
+              (n) =>
+                ['FeverStart', 'FeverChance', 'Skill'].includes(n.type) &&
+                n.beat === nearestBeat,
+            ).length === 0
+          ) {
+            saveHistory()
+            const newNote: Note = {
+              beat: nearestBeat,
+              type: 'Skill',
+              isEvent: true,
+            }
+
+            chartNotes.push(newNote)
+            _eventOffsetCache = computeEventOffsets()
+            disableCachedScaledTimes()
           }
         } else if (
           globalState.selectedTool === 2 ||
           globalState.selectedTool === 7
         ) {
           saveHistory()
-          const newStartNote = {
+          const newStartNote: Note = {
             type: 'HoldStart',
             beat: nearestBeat,
             lane: newLane,
@@ -2643,9 +3060,9 @@ const draw = (timeStamp: number) => {
             easingType: EasingType.Linear,
             isGuide: globalState.selectedTool === 7,
             isHidden: globalState.selectedTool === 7,
-          } as HoldStart
+          } as Note
 
-          const newEndNote = {
+          const newEndNote: Note = {
             type: 'HoldEnd',
             beat:
               nearestBeat + getTsig(nearestBeat).bottom / globalState.division,
@@ -2656,12 +3073,15 @@ const draw = (timeStamp: number) => {
             flickDir: FlickDirection.None,
             isHidden: globalState.selectedTool === 7,
             prevNode: newStartNote,
-          } as HoldEnd
+          } as Note
 
-          newStartNote.nextNode = newEndNote
+          ;(newStartNote as any).nextNode = newEndNote
 
           chartNotes.push(newStartNote)
           chartNotes.push(newEndNote)
+
+          // Cache holdStart and holdEnd references
+          cacheHoldChainReferences(newStartNote as SolidNote)
         } else if (globalState.selectedTool === 3) {
           saveHistory()
           const viableNotes = chartNotes
@@ -2671,9 +3091,8 @@ const draw = (timeStamp: number) => {
                 n.beat >= nearestBeat
               )
                 return false
-              const note = n as HoldStart | HoldTick
 
-              let nN = note.nextNode
+              let nN = n.nextNode
               while ('nextNode' in nN && nN.tickType === TickType.Skip)
                 nN = nN.nextNode
 
@@ -2681,16 +3100,16 @@ const draw = (timeStamp: number) => {
 
               // console.log('beat works: ', n)
 
-              const percentY = (nearestBeat - note.beat) / (nN.beat - note.beat)
+              const percentY = (nearestBeat - n.beat) / (nN.beat - n.beat)
               const easedY =
-                note.easingType === EasingType.EaseIn
+                n.easingType === EasingType.EaseIn
                   ? Math.pow(percentY, 2)
-                  : note.easingType === EasingType.EaseOut
+                  : n.easingType === EasingType.EaseOut
                     ? 1 - Math.pow(1 - percentY, 2)
                     : percentY
 
-              const lanePos = (1 - easedY) * note.lane + easedY * nN.lane
-              const sizePos = (1 - easedY) * note.size + easedY * nN.size
+              const lanePos = (1 - easedY) * n.lane + easedY * nN.lane
+              const sizePos = (1 - easedY) * n.size + easedY * nN.size
 
               const minX = (lanePos - sizePos / 2) * 2 * laneWidth + width / 2
               const maxX = (lanePos + sizePos / 2) * 2 * laneWidth + width / 2
@@ -2703,13 +3122,15 @@ const draw = (timeStamp: number) => {
 
               return true
             })
-            .sort((a, b) => b.beat - a.beat)
+            .sort((a, b) => b.beat - a.beat) as (Note & {
+            type: 'HoldStart' | 'HoldTick'
+          })[]
 
           if (viableNotes.length > 0) {
-            const base = viableNotes[0] as HoldStart | HoldTick
+            const base = viableNotes[0]
             const end = base.nextNode
 
-            const newNote = {
+            const newNote: Note = {
               type: 'HoldTick',
               beat: nearestBeat,
               lane: newLane,
@@ -2722,16 +3143,19 @@ const draw = (timeStamp: number) => {
               easingType: EasingType.Linear,
               nextNode: end,
               prevNode: base,
-            } as HoldTick
+            }
 
             base.nextNode = newNote
             end.prevNode = newNote
 
             chartNotes.push(newNote)
+
+            // Update cached references for the modified hold chain
+            cacheHoldChainReferences(newNote)
           }
         } else {
           saveHistory()
-          const newNote = {
+          const newNote: Note = {
             type: 'Tap',
             beat: nearestBeat,
             lane: newLane,
@@ -2742,7 +3166,7 @@ const draw = (timeStamp: number) => {
               globalState.selectedTool === 4
                 ? nextNoteOptions.flickDir
                 : FlickDirection.None,
-          } as TapNote
+          }
 
           chartNotes.push(newNote)
         }
@@ -2774,12 +3198,10 @@ const draw = (timeStamp: number) => {
 
       chartNotes
         .filter((n) => {
-          if (['HiSpeed', 'BPMChange', 'TimeSignature'].includes(n.type)) {
+          if ('isEvent' in n) {
             const o =
-              width / 2 +
-              laneWidth * 6 +
-              getEventOffset(n as BPMChange | TimeSignature | HiSpeed)
-            const s = getEventSize(n as BPMChange | TimeSignature | HiSpeed)
+              width / 2 + laneWidth * 6 + getEventOffset(n as SolidEvent)
+            const s = getEventSize(n as SolidEvent)
             const b = beatToY(n.beat)
             return mX <= o && MX >= o + s.width && MY >= b && mY <= b - s.height
           }
@@ -2808,7 +3230,7 @@ const draw = (timeStamp: number) => {
         .filter((_, i) => selectedIndeces.has(i))
         .forEach((n) => {
           if (['HoldStart', 'HoldTick', 'HoldEnd'].includes(n.type))
-            sortHold(n as HoldStart | HoldTick | HoldEnd)
+            sortHold(n as any)
         })
     }
   }
@@ -2828,9 +3250,9 @@ const draw = (timeStamp: number) => {
       .forEach((n) => {
         if (['Tap', 'HoldStart', 'HoldEnd', 'HoldTick'].includes(n.type)) {
           if (n.type === 'HoldStart') {
-            if ((n as HoldStart).isGuide) return
+            if (n.isGuide) return
 
-            if ((n as HoldStart).isGold) {
+            if (n.isGold) {
               if (goldHoldsPlaying === 0) {
                 playLongGold()
               }
@@ -2844,12 +3266,12 @@ const draw = (timeStamp: number) => {
               holdsPlaying++
             }
 
-            if ((n as HoldStart).isHidden) return
+            if (n.isHidden) return
           }
           if (n.type === 'HoldEnd') {
-            if ((n as HoldEnd).prevNode.isGuide) return
+            if (n.prevNode.isGuide) return
 
-            if ((n as HoldEnd).prevNode.isGold) {
+            if (n.prevNode.isGold) {
               goldHoldsPlaying--
 
               if (goldHoldsPlaying === 0) {
@@ -2863,12 +3285,12 @@ const draw = (timeStamp: number) => {
               }
             }
 
-            if ((n as HoldEnd).isHidden) return
+            if (n.isHidden) return
           }
-          const note = n as TapNote
+          const note = n as any
           let p: HTMLAudioElement
           if (n.type === 'HoldTick') {
-            if ((n as HoldTick).tickType !== TickType.Hidden)
+            if (n.tickType !== TickType.Hidden)
               p = note.isGold ? noteFxPlayers.critTick : noteFxPlayers.tick
             else return
           } else if (
@@ -2928,7 +3350,9 @@ const draw = (timeStamp: number) => {
 
   notesToRender
     .filter((n) => selectedIndeces.has(chartNotes.indexOf(n)))
-    .forEach((n) => drawSelectionOutline(n))
+    .forEach((n) => {
+      if (!('isEvent' in n)) drawSelectionOutline(n)
+    })
 
   chartNotes
     .filter((n) => {
@@ -2946,14 +3370,13 @@ const draw = (timeStamp: number) => {
         !notesToRender.includes(nextN)
       )
     })
-    .forEach((n) => drawHoldLine(n))
+    .forEach((n) => drawHoldLine(n as any))
 
   notesToRender.forEach((n) => {
-    if (n.type === 'HoldTick' && (n as HoldTick).tickType === TickType.Skip)
-      return
+    if (n.type === 'HoldTick' && n.tickType === TickType.Skip) return
 
     if (n.type === 'HoldEnd' || n.type === 'HoldTick') {
-      let pN = (n as HoldTick | HoldEnd).prevNode
+      let pN = n.prevNode
 
       while ('prevNode' in pN && pN.tickType === TickType.Skip) pN = pN.prevNode
 
@@ -2964,7 +3387,9 @@ const draw = (timeStamp: number) => {
     }
   })
   notesToRender.forEach((n) => drawNote(n))
-  notesToRender.forEach((n) => drawFlickArrow(n))
+  notesToRender.forEach((n) => {
+    if (!('isEvent' in n)) drawFlickArrow(n)
+  })
 
   if (
     mouseIsPressed &&
@@ -3011,10 +3436,16 @@ const draw = (timeStamp: number) => {
         // compute group's current horizontal center (in lane units) so we can
         // position the group such that the mouse sits at the group's center
         const groupLeft = Math.min(
-          ...clipboard.map((n) => (n.lane ?? 0) - ((n as Note).size ?? 1) / 2),
+          ...clipboard.map((n) => {
+            if ('lane' in n) return n.lane - (n.size ?? 1) / 2
+            return 0
+          }),
         )
         const groupRight = Math.max(
-          ...clipboard.map((n) => (n.lane ?? 0) + ((n as Note).size ?? 1) / 2),
+          ...clipboard.map((n) => {
+            if ('lane' in n) return n.lane + (n.size ?? 1) / 2
+            return 0
+          }),
         )
         let groupCenter = (groupLeft + groupRight) / 2
         groupCenter = Math.floor(groupCenter * 2) / 2
@@ -3023,8 +3454,8 @@ const draw = (timeStamp: number) => {
         // For each note determine allowed laneOffset range so the note stays within -3..3
         const allowedLows: number[] = []
         const allowedHighs: number[] = []
-        for (const n of clipboard) {
-          const size = (n as Note).size ?? 1
+        for (const n of clipboard as SolidNote[]) {
+          const size = n.size ?? 1
           const minLane = -3 + size / 2
           const maxLane = 3 - size / 2
           allowedLows.push(minLane - (n.lane ?? 0))
@@ -3056,7 +3487,8 @@ const draw = (timeStamp: number) => {
         const adjusted: Note[] = clipboard.map((n) => {
           const copy: Note = { ...n }
           copy.beat = (n.beat ?? 0) + beatOffset
-          copy.lane = (n.lane ?? 0) + laneOffset
+          if ('lane' in n && 'lane' in copy)
+            copy.lane = (n.lane ?? 0) + laneOffset
           adjustedMap.set(n, copy)
           return copy
         })
@@ -3100,8 +3532,8 @@ const draw = (timeStamp: number) => {
             easingType: EasingType.Linear,
             isHidden: globalState.selectedTool === 7,
             isGuide: globalState.selectedTool === 7,
-            nextNode: {} as HoldEnd,
-          } as HoldStart
+            nextNode: {} as any,
+          }
         else if (globalState.selectedTool === 3)
           newNote = {
             type: 'HoldTick',
@@ -3109,11 +3541,12 @@ const draw = (timeStamp: number) => {
             lane: newLane,
             size: nextNoteOptions.size,
             isGold: false,
+            isGuide: false,
             tickType: nextNoteOptions.tickType,
             easingType: EasingType.Linear,
-            nextNode: {} as HoldEnd,
-            prevNode: {} as HoldStart,
-          } as HoldTick
+            nextNode: {} as any,
+            prevNode: {} as any,
+          }
         else
           newNote = {
             type: 'Tap',
@@ -3126,7 +3559,7 @@ const draw = (timeStamp: number) => {
               globalState.selectedTool === 4
                 ? nextNoteOptions.flickDir
                 : FlickDirection.None,
-          } as TapNote
+          }
 
         ctx.globalAlpha = 0.5
         drawNote(newNote)

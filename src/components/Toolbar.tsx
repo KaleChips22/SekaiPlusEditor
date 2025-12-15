@@ -17,7 +17,9 @@ import {
   exportUSC,
   nextNoteOptions,
   paste,
+  redo,
   savePJSK,
+  undo,
 } from '../editor/draw'
 import { FlickDirection, TickType } from '../editor/note'
 import { newFile, openFile } from '../editor/fileOps'
@@ -35,32 +37,60 @@ const ToolBar = ({
   const [flickIconNum, setFlickIconNum] = useState(0)
 
   const tools = [
-    { label: 'new', icon: <FilePlus2 />, action: () => newFile() },
-    { label: 'open', icon: <FolderOpen />, action: () => openFile() },
-    { label: 'save', icon: <Save />, action: () => savePJSK() },
-    { label: 'export', icon: <FileOutput />, action: () => exportUSC() },
+    {
+      label: 'new',
+      icon: <FilePlus2 />,
+      action: () => newFile(),
+      toolTip: 'New File',
+    },
+    {
+      label: 'open',
+      icon: <FolderOpen />,
+      action: () => openFile(),
+      toolTip: 'Open File',
+    },
+    {
+      label: 'save',
+      icon: <Save />,
+      action: () => savePJSK(),
+      toolTip: 'Save File',
+    },
+    {
+      label: 'export',
+      icon: <FileOutput />,
+      action: () => exportUSC(),
+      toolTip: 'Export File',
+    },
     { type: 'separator' },
-    { label: 'cut', icon: <Scissors />, action: () => cut() },
-    { label: 'copy', icon: <Copy />, action: () => copy() },
-    { label: 'paste', icon: <Clipboard />, action: () => paste() },
+    { label: 'cut', icon: <Scissors />, action: () => cut(), toolTip: 'Cut' },
+    { label: 'copy', icon: <Copy />, action: () => copy(), toolTip: 'Copy' },
+    {
+      label: 'paste',
+      icon: <Clipboard />,
+      action: () => paste(),
+      toolTip: 'Paste',
+    },
     { type: 'separator' },
-    { label: 'undo', icon: <Undo2 />, action: () => {} },
-    { label: 'redo', icon: <Redo2 />, action: () => {} },
+    { label: 'undo', icon: <Undo2 />, action: () => undo(), toolTip: 'Undo' },
+    { label: 'redo', icon: <Redo2 />, action: () => redo(), toolTip: 'Redo' },
     { type: 'separator' },
     {
       label: 'cursor',
       icon: 'timeline_select',
       action: () => setSelectedTool(0),
+      toolTip: 'Select',
     },
     {
       label: 'tap_note',
       icon: 'timeline_tap',
       action: () => setSelectedTool(1),
+      toolTip: 'Tap Note',
     },
     {
       label: 'hold_note',
       icon: 'timeline_hold',
       action: () => setSelectedTool(2),
+      toolTip: 'Hold Note',
     },
     {
       label: 'hold_tick',
@@ -71,6 +101,7 @@ const ToolBar = ({
             ? 'timeline_hold_step_hidden'
             : 'timeline_hold_step_skip',
       action: () => setSelectedTool(3),
+      toolTip: 'Hold Tick',
     },
     {
       label: 'flick_note',
@@ -81,36 +112,55 @@ const ToolBar = ({
             ? 'timeline_flick_left'
             : 'timeline_flick_right',
       action: () => setSelectedTool(4),
+      toolTip: 'Flick Note',
     },
     {
       label: 'gold_note',
       icon: 'timeline_critical',
       action: () => setSelectedTool(5),
+      toolTip: 'Gold Note',
     },
     {
       label: 'trace_note',
       icon: 'timeline_trace',
       action: () => setSelectedTool(6),
+      toolTip: 'Trace Note',
     },
     {
       label: 'guide',
       icon: 'timeline_guide_green',
       action: () => setSelectedTool(7),
+      toolTip: 'Guide',
     },
     {
       label: 'bpm_change',
       icon: 'timeline_bpm',
       action: () => setSelectedTool(8),
+      toolTip: 'BPM Change',
     },
     {
       label: 'time_signature',
       icon: 'timeline_time_signature',
       action: () => setSelectedTool(9),
+      toolTip: 'Time Signature',
     },
     {
       label: 'hi_speed',
       icon: 'timeline_hi_speed',
       action: () => setSelectedTool(10),
+      toolTip: 'Hi Speed',
+    },
+    {
+      label: 'fever',
+      icon: 'timeline_fever',
+      action: () => setSelectedTool(11),
+      toolTip: 'Fever',
+    },
+    {
+      label: 'skill',
+      icon: 'timeline_skill',
+      action: () => setSelectedTool(12),
+      toolTip: 'Skill',
     },
   ]
 
@@ -145,7 +195,7 @@ const ToolBar = ({
     window.addEventListener('keyup', updateTool)
 
     return () => window.removeEventListener('keyup', updateTool)
-  }, [selectedTool, tickIconNum, flickIconNum])
+  }, [selectedTool, tickIconNum, flickIconNum, setSelectedTool])
 
   return (
     <div className="h-full w-full bg-neutral-800 px-1.5 flex items-center text-white">
@@ -156,7 +206,7 @@ const ToolBar = ({
           ) : (
             <div
               className={twMerge(
-                'size-5 hover:bg-neutral-700 rounded-xs overflow-hidden flex items-center justify-center p-0.5',
+                'size-5 hover:bg-neutral-700 rounded-xs flex items-center justify-center p-0.5 relative group',
                 selectedTool + 12 === index && 'bg-accent hover:bg-accent',
               )}
               onClick={tool.action}
@@ -167,6 +217,11 @@ const ToolBar = ({
               ) : (
                 tool.icon
               )}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 bg-neutral-900 hidden group-hover:flex p-0.5 text-xs z-900000 gap-0.5 flex-row">
+                {tool.toolTip?.split(' ').map((word, i) => (
+                  <span key={i}>{word}</span>
+                ))}
+              </div>
             </div>
           ),
         )}

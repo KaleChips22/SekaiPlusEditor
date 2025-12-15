@@ -1,15 +1,4 @@
-import {
-  BPMChange,
-  EasingType,
-  FlickDirection,
-  HiSpeed,
-  HoldEnd,
-  HoldStart,
-  HoldTick,
-  Note,
-  TapNote,
-  TickType,
-} from './note'
+import { EasingType, FlickDirection, Note, TickType } from './note'
 
 export const notesToUSC = (notes: Note[], offset: number) => {
   const usc = {
@@ -19,50 +8,70 @@ export const notesToUSC = (notes: Note[], offset: number) => {
 
   const hiSpeedChanges: any[] = []
 
+  const uscLayer = {
+    type: 'timeScaleGroup',
+    changes: [] as any[],
+  }
+
+  notes
+    .filter((n) => n.type === 'HiSpeed')
+    .forEach((n) => {
+      const hiSpeed = n as Note & { type: 'HiSpeed' }
+
+      uscLayer.changes.push({
+        beat: hiSpeed.beat,
+        timeScale: hiSpeed.speed,
+      })
+    })
+
+  usc.objects.push(uscLayer)
+
   notes.forEach((note) => {
     if (note.type === 'Tap') {
-      const n = note as TapNote
-
       usc.objects.push({
-        beat: n.beat,
-        critical: n.isGold,
-        lane: n.lane * 2,
-        size: n.size,
+        beat: note.beat,
+        critical: note.isGold,
+        lane: note.lane * 2,
+        size: note.size,
         timeScaleGroup: 0,
-        trace: n.isTrace,
+        trace: note.isTrace,
         type: 'single',
-        ...(n.flickDir !== FlickDirection.None
+        ...(note.flickDir !== FlickDirection.None
           ? {
               direction:
-                n.flickDir === FlickDirection.Default
+                note.flickDir === FlickDirection.Default
                   ? 'up'
-                  : n.flickDir === FlickDirection.Left
+                  : note.flickDir === FlickDirection.Left
                     ? 'left'
                     : 'right',
             }
           : {}),
       })
     } else if (note.type === 'BPMChange') {
-      const n = note as BPMChange
-
       usc.objects.push({
         type: 'bpm',
-        beat: n.beat,
-        bpm: n.BPM,
+        beat: note.beat,
+        bpm: note.BPM,
       })
-    } else if (note.type === 'HiSpeed') {
-      const n = note as HiSpeed
-
-      hiSpeedChanges.push({
-        beat: n.beat,
-        timeScale: n.speed,
+    } else if (note.type === 'FeverChance') {
+      usc.objects.push({
+        type: 'feverChance',
+        beat: note.beat,
+      })
+    } else if (note.type === 'FeverStart') {
+      usc.objects.push({
+        type: 'feverStart',
+        beat: note.beat,
+      })
+    } else if (note.type === 'Skill') {
+      usc.objects.push({
+        type: 'skill',
+        beat: note.beat,
       })
     } else if (note.type === 'HoldStart') {
-      const hs = note as HoldStart
-
       const connections: any[] = []
 
-      let n: HoldStart | HoldTick | HoldEnd = hs
+      let n = note as Note & { type: 'HoldStart' | 'HoldEnd' | 'HoldTick' }
       while ('nextNode' in n) {
         let ease = 'linear'
         switch (n.easingType) {
@@ -72,12 +81,6 @@ export const notesToUSC = (notes: Note[], offset: number) => {
           case EasingType.EaseOut:
             ease = 'out'
             break
-          case EasingType.EaseInOut:
-            ease = 'inout'
-            break
-          case EasingType.EaseOutIn:
-            ease = 'outin'
-            break
           case EasingType.Linear:
           default:
             ease = 'linear'
@@ -85,13 +88,13 @@ export const notesToUSC = (notes: Note[], offset: number) => {
         }
 
         connections.push({
-          ...(hs.isGuide
+          ...(note.isGuide
             ? {}
             : {
                 type:
                   n.type === 'HoldStart'
                     ? 'start'
-                    : n.tickType === TickType.Skip
+                    : 'tickType' in n && n.tickType === TickType.Skip
                       ? 'attach'
                       : 'tick',
               }),
@@ -100,7 +103,8 @@ export const notesToUSC = (notes: Note[], offset: number) => {
           lane: n.lane * 2,
           size: n.size,
           timeScaleGroup: 0,
-          ...(n.type === 'HoldStart' || n.tickType !== TickType.Hidden
+          ...(n.type === 'HoldStart' ||
+          ('tickType' in n && n.tickType !== TickType.Hidden)
             ? { critical: n.isGold }
             : {}),
           ...(n.type === 'HoldStart'
@@ -110,10 +114,74 @@ export const notesToUSC = (notes: Note[], offset: number) => {
             : {}),
         })
 
+        // connections.push(
+        //   hs.isGuide
+        //     ? n.type === 'HoldTick' &&
+        //       (n as HoldTick).tickType === TickType.Skip
+        //       ? {
+        //           beat: n.beat,
+        //           attach: true,
+        //           lane: n.lane * 2,
+        //           size: n.size,
+        //           timeScaleGroup: layersMap.get(n.layer) || 0,
+        //           type: 'hidden',
+        //         }
+        //       : {
+        //           beat: n.beat,
+        //           ease,
+        //           lane: n.lane * 2,
+        //           size: n.size,
+        //           timeScaleGroup: layersMap.get(n.layer) || 0,
+        //           type: 'hidden',
+        //         }
+        //     : n.type === 'HoldStart'
+        //       ? (n as HoldStart).isHidden
+        //         ? {
+        //             type: 'hidden',
+        //             beat: n.beat,
+        //             ease,
+        //             lane: n.lane * 2,
+        //             size: n.size,
+        //             timeScaleGroup: layersMap.get(n.layer) || 0,
+        //           }
+        //         : {
+        //             type: 'single',
+        //             beat: n.beat,
+        //             ease,
+        //             lane: n.lane * 2,
+        //             size: n.size,
+        //             timeScaleGroup: layersMap.get(n.layer) || 0,
+        //             trace: n.isTrace,
+        //             critical: n.isGold,
+        //             dummy: false,
+        //           }
+        //       : (n as HoldTick).tickType === TickType.Hidden
+        //         ? {
+        //             type: 'hidden',
+        //             beat: n.beat,
+        //             ease,
+        //             lane: n.lane * 2,
+        //             size: n.size,
+        //             timeScaleGroup: layersMap.get(n.layer) || 0,
+        //           }
+        //         : {
+        //             type: 'tick',
+        //             beat: n.beat,
+        //             ease,
+        //             lane: n.lane * 2,
+        //             size: n.size,
+        //             timeScaleGroup: layersMap.get(n.layer) || 0,
+        //             critical: n.isGold,
+        //             ...((n as HoldTick).tickType === TickType.Skip
+        //               ? {
+        //                   attach: true,
+        //                 }
+        //               : {}),
+        //           },
+        // )
+
         n = n.nextNode
       }
-
-      n = n as HoldEnd
 
       connections.push({
         type: 'end',
@@ -135,25 +203,76 @@ export const notesToUSC = (notes: Note[], offset: number) => {
           : {}),
       })
 
+      // connections.push(
+      //   hs.isGuide
+      //     ? {
+      //         type: 'hidden',
+      //         beat: n.beat,
+      //         lane: n.lane * 2,
+      //         size: n.size,
+      //         ease: 'none',
+      //         timeScaleGroup: layersMap.get(n.layer) || 0,
+      //       }
+      //     : (n as HoldEnd).isHidden
+      //       ? {
+      //           type: 'hidden',
+      //           beat: n.beat,
+      //           lane: n.lane * 2,
+      //           size: n.size,
+      //           ease: 'none',
+      //           timeScaleGroup: layersMap.get(n.layer) || 0,
+      //         }
+      //       : {
+      //           type: 'single',
+      //           beat: n.beat,
+      //           lane: n.lane * 2,
+      //           size: n.size,
+      //           ease: 'none',
+      //           timeScaleGroup: layersMap.get(n.layer) || 0,
+      //           critical: n.isGold,
+      //           trace: n.isTrace,
+      //           dummy: false,
+      //           direction:
+      //             n.flickDir === FlickDirection.Right
+      //               ? 'upRight'
+      //               : n.flickDir === FlickDirection.Left
+      //                 ? 'upLeft'
+      //                 : 'up',
+      //         },
+      // )
+
+      // usc.objects.push(
+      //   // critical: hs.isGold,
+      //   hs.isGuide
+      //     ? {
+      //         type: 'guide',
+      //         color: hs.isGold ? 'yellow' : 'green',
+      //         fade: 'out',
+      //         connections,
+      //       }
+      //     : {
+      //         type: 'slide',
+      //         critical: hs.isGold,
+      //         connections,
+      //         dummy: false,
+      //       },
+      // )
+
       usc.objects.push({
-        type: hs.isGuide ? 'guide' : 'slide',
-        // critical: hs.isGold,
-        ...(hs.isGuide
+        type: note.isGuide ? 'guide' : 'slide',
+        ...(note.isGuide
           ? {
-              color: hs.isGold ? 'yellow' : 'green',
+              color: note.isGold ? 'yellow' : 'green',
             }
           : {
-              critical: hs.isGold,
+              critical: note.isGold,
             }),
-        [hs.isGuide ? 'midpoints' : 'connections']: connections,
+        [note.isGuide ? 'midpoints' : 'connections']: connections,
       })
     }
   })
 
-  usc.objects.push({
-    type: 'timeScaleGroup',
-    changes: hiSpeedChanges,
-  })
+  usc.objects.push(...hiSpeedChanges)
 
   return { usc, version: 2 }
 }
@@ -166,151 +285,189 @@ export const USCToNotes = (data: {
 
   const { offset, objects } = data.usc
 
-  objects.forEach((o) => {
-    if (!('type' in o)) return
-
-    if (o.type === 'single') {
-      let flickDir = FlickDirection.None
-      if ('direction' in o) {
-        if (o.direction === 'left') flickDir = FlickDirection.Left
-        else if (o.direction === 'right') flickDir = FlickDirection.Right
-        else flickDir = FlickDirection.Default
-      }
-      const n = {
-        type: 'Tap',
-        beat: o.beat,
-        isGold: o.critical,
-        lane: o.lane / 2,
-        size: o.size,
-        isTrace: o.trace,
-        flickDir,
-      } as TapNote
-
-      notes.push(n)
-    } else if (o.type === 'bpm') {
-      const n = {
-        type: 'BPMChange',
-        beat: o.beat,
-        BPM: o.bpm,
-        lane: 0,
-        size: 0,
-      } as BPMChange
-
-      notes.push(n)
-    } else if (o.type === 'timeScaleGroup') {
-      if (!('changes' in o)) return
-      o.changes.forEach((c: any) => {
-        const n = {
+  objects
+    .filter((o) => o.type === 'timeScaleGroup')
+    .forEach((t) => {
+      t.changes.forEach((c: { beat: number; timeScale: number }) => {
+        const hiSpeed: Note = {
           type: 'HiSpeed',
-          lane: 0,
-          size: 0,
           beat: c.beat,
           speed: c.timeScale,
-        } as HiSpeed
+          isEvent: true,
+        }
+
+        notes.push(hiSpeed)
+      })
+    })
+
+  objects
+    .filter((o) => o.type !== 'timeScaleGroup')
+    .forEach((o) => {
+      if (!('type' in o)) return
+
+      if (o.type === 'single') {
+        let flickDir = FlickDirection.None
+        if ('direction' in o) {
+          if (o.direction === 'left') flickDir = FlickDirection.Left
+          else if (o.direction === 'right') flickDir = FlickDirection.Right
+          else if (o.direction === 'up') flickDir = FlickDirection.Default
+        }
+        const n: Note = {
+          type: 'Tap',
+          beat: o.beat,
+          isGold: o.critical,
+          lane: o.lane / 2,
+          size: o.size,
+          isTrace: o.trace,
+          flickDir,
+        }
 
         notes.push(n)
-      })
-    } else if (o.type === 'slide' || o.type === 'guide') {
-      if (!('connections' in o || 'midpoints' in o)) return
-      const connections = o[
-        'connections' in o ? 'connections' : 'midpoints'
-      ].sort((a: any, b: any) => a.beat - b.beat) as any[]
-
-      const holdNotes = [] as Note[]
-
-      connections.forEach((c, i) => {
-        if (i === 0) {
-          let easingType = EasingType.Linear
-          switch (c.ease) {
-            case 'in':
-              easingType = EasingType.EaseIn
-              break
-            case 'out':
-              easingType = EasingType.EaseOut
-              break
-            case 'inout':
-              easingType = EasingType.EaseInOut
-              break
-            case 'outin':
-              easingType = EasingType.EaseOutIn
-              break
-            case 'linear':
-            default:
-              easingType = EasingType.Linear
-              break
-          }
-
-          const n = {
-            type: 'HoldStart',
-            size: c.size,
-            lane: c.lane / 2,
-            beat: c.beat,
-            isGold: o.type === 'guide' ? o.color === 'yellow' : o.critical,
-            isGuide: o.type === 'guide',
-            isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
-            isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
-            easingType,
-          } as HoldStart
-
-          holdNotes.push(n)
-        } else if (i === connections.length - 1) {
-          let flickDir = FlickDirection.None
-          if ('direction' in c) {
-            if (c.direction === 'left') flickDir = FlickDirection.Left
-            else if (c.direction === 'right') flickDir = FlickDirection.Right
-            else flickDir = FlickDirection.Default
-          }
-
-          const n = {
-            type: 'HoldEnd',
-            size: c.size,
-            lane: c.lane / 2,
-            beat: c.beat,
-            isGold:
-              o.type === 'guide'
-                ? o.color === 'yellow'
-                : 'critical' in c
-                  ? c.critical
-                  : o.critical,
-            isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
-            isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
-            flickDir,
-          } as HoldEnd
-
-          n.prevNode = holdNotes[i - 1] as HoldStart | HoldTick
-          n.prevNode.nextNode = n
-
-          holdNotes.push(n)
-        } else {
-          let easingType = EasingType.Linear
-          if (c.ease === 'out') easingType = EasingType.EaseOut
-          else if (c.ease === 'in') easingType = EasingType.EaseIn
-
-          let tickType = TickType.Hidden
-          if (c.type === 'attach') tickType = TickType.Skip
-          else if ('critical' in c) tickType = TickType.Normal
-
-          const n = {
-            type: 'HoldTick',
-            size: c.size,
-            lane: c.lane / 2,
-            beat: c.beat,
-            isGold: o.type === 'guide' ? o.color === 'yellow' : o.critical,
-            isGuide: o.type === 'guide',
-            easingType,
-            tickType,
-          } as HoldTick
-
-          n.prevNode = holdNotes[i - 1] as HoldStart | HoldTick
-          n.prevNode.nextNode = n
-
-          holdNotes.push(n)
+      } else if (o.type === 'bpm') {
+        const n: Note = {
+          type: 'BPMChange',
+          beat: o.beat,
+          BPM: o.bpm,
+          isEvent: true,
         }
-      })
 
-      notes.push(...holdNotes)
-    }
-  })
+        notes.push(n)
+      } else if (o.type === 'feverChance') {
+        const n: Note = {
+          type: 'FeverChance',
+          beat: o.beat,
+          isEvent: true,
+        }
+
+        notes.push(n)
+      } else if (o.type === 'feverStart') {
+        const n: Note = {
+          type: 'FeverStart',
+          beat: o.beat,
+          isEvent: true,
+        }
+
+        notes.push(n)
+      } else if (o.type === 'skill') {
+        const n: Note = {
+          type: 'Skill',
+          beat: o.beat,
+          isEvent: true,
+        }
+
+        notes.push(n)
+      } else if (o.type === 'slide' || o.type === 'guide') {
+        if (!('connections' in o || 'midpoints' in o)) return
+        const connections = o[
+          'connections' in o ? 'connections' : 'midpoints'
+        ].sort((a: any, b: any) => a.beat - b.beat) as any[]
+
+        const holdNotes = [] as Note[]
+
+        connections.forEach((c, i) => {
+          if (i === 0) {
+            let easingType = EasingType.Linear
+            switch (c.ease) {
+              case 'in':
+                easingType = EasingType.EaseIn
+                break
+              case 'out':
+                easingType = EasingType.EaseOut
+                break
+
+              case 'linear':
+              default:
+                easingType = EasingType.Linear
+                break
+            }
+
+            const n: Note = {
+              type: 'HoldStart',
+              size: c.size,
+              lane: c.lane / 2,
+              beat: c.beat,
+              isGold: o.type === 'guide' ? o.color === 'yellow' : o.critical,
+              isGuide: o.type === 'guide',
+              isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
+              isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
+              easingType,
+              nextNode: {} as any,
+            }
+
+            holdNotes.push(n)
+          } else if (i === connections.length - 1) {
+            let flickDir = FlickDirection.None
+            if (c.type === 'end') {
+              if (c.direction === 'left') flickDir = FlickDirection.Left
+              else if (c.direction === 'right') flickDir = FlickDirection.Right
+              else if (c.direction === 'up') flickDir = FlickDirection.Default
+            }
+
+            const n: Note = {
+              type: 'HoldEnd',
+              size: c.size,
+              lane: c.lane / 2,
+              beat: c.beat,
+              isGold:
+                o.type === 'guide'
+                  ? o.color === 'yellow'
+                  : 'critical' in c
+                    ? c.critical
+                    : o.critical,
+              isHidden: o.type === 'guide' ? true : c.judgeType === 'none',
+              isTrace: o.type === 'guide' ? false : c.judgeType === 'trace',
+              prevNode: {} as any,
+              flickDir,
+            }
+
+            ;(n as any).prevNode = holdNotes[i - 1]
+            ;(n as any).prevNode.nextNode = n
+
+            holdNotes.push(n)
+          } else {
+            let easingType = EasingType.Linear
+            switch (c.ease) {
+              case 'in':
+                easingType = EasingType.EaseIn
+                break
+              case 'out':
+                easingType = EasingType.EaseOut
+                break
+
+                break
+              case 'linear':
+              default:
+                easingType = EasingType.Linear
+                break
+            }
+
+            let tickType = TickType.Hidden
+            if (c.type === 'attach') tickType = TickType.Skip
+            else if ('critical' in c) tickType = TickType.Normal
+
+            const n: Note = {
+              type: 'HoldTick',
+              size: c.size,
+              lane: c.lane / 2,
+              beat: c.beat,
+              isGold: o.type === 'guide' ? o.color === 'yellow' : o.critical,
+              isGuide: o.type === 'guide',
+              easingType,
+              tickType,
+              nextNode: {} as any,
+              prevNode: {} as any,
+            }
+
+            ;(n as any).prevNode = holdNotes[i - 1]
+            ;(n as any).prevNode.nextNode = n
+
+            holdNotes.push(n)
+          }
+        })
+
+        notes.push(...holdNotes)
+      }
+    })
 
   return { notes, offset }
 }

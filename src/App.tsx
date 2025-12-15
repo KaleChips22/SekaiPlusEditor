@@ -85,8 +85,8 @@ const App = () => {
       <div className="flex flex-1 h-full">
         {/* <div className='flex-1'>editor</div> */}
         <Editor globalState={globalState} />
-        {/* <EditorFooter /> */}
         <Sidebar />
+        {/* <EditorFooter /> */}
       </div>
 
       <EditorFooter

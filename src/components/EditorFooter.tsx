@@ -6,6 +6,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 const EditorFooter = ({
   zoom,
@@ -22,6 +23,18 @@ const EditorFooter = ({
   //   division: 16,
   //   zoom: 3.0,
   // })
+
+  const [version, setVersion] = useState('0.0.0')
+
+  useEffect(() => {
+    window.ipcRenderer.on('version', (_event, version) => {
+      setVersion(version)
+    })
+
+    return () => {
+      window.ipcRenderer.removeAllListeners('version')
+    }
+  }, [setVersion])
 
   return (
     <div className="flex bg-neutral-700 text-sm text-white items-center justify-center px-1 absolute bottom-0 left-0 right-0 z-100">
@@ -63,7 +76,9 @@ const EditorFooter = ({
         />
         <ZoomIn className="size-5 p-0.5" />
       </div>
-      <div className="flex-1 max-w-sm" />
+      <div className="flex-1 max-w-sm h-full flex items-baseline justify-end text-[7px] text-neutral-300 line-clamp-1">
+        v{version}
+      </div>
     </div>
   )
 }

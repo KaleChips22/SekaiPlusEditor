@@ -1,8 +1,14 @@
-import { clearHistory, setChartNotes, setMusicOffset } from './draw'
+import {
+  clearHistory,
+  setChartNotes,
+  setIsExtendedChart,
+  setMusicOffset,
+  setChartMetadata,
+  resetChartMetadata,
+} from './draw'
 import { PJSKToNotes } from './PJSK'
 import { USCToNotes } from './USC'
 import { susToUSC } from './SUStoUSC'
-import { TimeSignature } from './note'
 // import { uscToLevelData } from './USCtoLevelData'
 
 let currentFilePath: string | null = null
@@ -11,45 +17,47 @@ const updateCurrentFilePath = (s: string | null) => (currentFilePath = s)
 export const openFile = () => {
   // const input = document.createElement('input')
   // input.type = 'file'
-  // input.accept = '.usc,.json,.pjsk'
+  // input.accept = '.usc,.json,.pjsk,.sus'
   // window.ipcRenderer.send('open-file')
   const loadFile = async () => {
     const result = await window.ipcRenderer.openFile()
 
     if (result) {
-      let json = {}
-      if (result.filePath.endsWith('.sus')) {
-        json = { usc: susToUSC(result.content) }
-      } else {
-        json = JSON.parse(result.content)
-      }
+      const json = { usc: susToUSC(result.content) }
 
       if ('usc' in json) {
-        console.log(json)
+        // console.log(json)
         updateCurrentFilePath(null)
         const { notes, offset } = USCToNotes(json as any)
 
         notes.push({
           beat: 0,
-          lane: 0,
-          size: 0,
           type: 'TimeSignature',
           bottom: 4,
           top: 4,
-        } as TimeSignature)
+          isEvent: true,
+        })
 
         setMusicOffset(offset)
         setChartNotes(notes)
+        resetChartMetadata()
         clearHistory()
+        window.dispatchEvent(new CustomEvent('metadataLoaded'))
       } else {
         updateCurrentFilePath(result.filePath)
-        const { notes, offset } = PJSKToNotes(json)
+        const { notes, offset, isExtendedChart, metadata } = PJSKToNotes(json)
 
         // console.log(notes)
 
+        setIsExtendedChart(true)
         setMusicOffset(offset)
         setChartNotes(notes)
+        setIsExtendedChart(isExtendedChart)
+        if (metadata) {
+          setChartMetadata(metadata)
+        }
         clearHistory()
+        window.dispatchEvent(new CustomEvent('metadataLoaded'))
       }
     }
   }
@@ -87,7 +95,35 @@ export const newFile = () => {
   )
     return
 
-  setChartNotes([])
+  setIsExtendedChart(true)
+
+  setChartNotes([
+    {
+      beat: 0,
+      type: 'HiSpeed',
+      speed: 1,
+      isEvent: true,
+    },
+    {
+      beat: 0,
+      type: 'TimeSignature',
+      bottom: 4,
+      top: 4,
+      isEvent: true,
+    },
+    {
+      beat: 0,
+      type: 'BPMChange',
+      BPM: 160,
+      isEvent: true,
+    },
+  ])
+
+  setIsExtendedChart(false)
+
+  resetChartMetadata()
+
   updateCurrentFilePath(null)
   clearHistory()
+  window.dispatchEvent(new CustomEvent('metadataLoaded'))
 }

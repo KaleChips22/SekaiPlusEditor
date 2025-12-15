@@ -1,10 +1,23 @@
-export interface Note {
+interface BaseNote {
   beat: number
   lane: number
   size: number
+  type: string
 
+  scaledHitTime?: number
+}
+
+interface BaseEvent {
+  isEvent: true
+  beat: number
   type: string
 }
+
+export type Note = SolidNote | SolidEvent
+
+export type SolidNote = BaseNote & (TapNote | HoldStart | HoldEnd | HoldTick)
+export type SolidEvent = BaseEvent &
+  (BPMChange | HiSpeed | TimeSignature | FeverChance | FeverStart | Skill)
 
 export enum FlickDirection {
   Default,
@@ -17,8 +30,6 @@ export enum EasingType {
   Linear,
   EaseIn,
   EaseOut,
-  EaseInOut,
-  EaseOutIn,
 }
 
 export enum TickType {
@@ -27,24 +38,27 @@ export enum TickType {
   Skip,
 }
 
-export interface TapNote extends Note {
+// export interface TapNote extends Note {
+//   type: 'Tap'
+
+//   beat: number
+//   lane: number
+//   size: number
+
+//   isGold: boolean
+//   isTrace: boolean
+//   flickDir: FlickDirection
+// }
+
+interface TapNote {
   type: 'Tap'
-
-  beat: number
-  lane: number
-  size: number
-
   isGold: boolean
   isTrace: boolean
   flickDir: FlickDirection
 }
 
-export interface HoldStart extends Note {
+interface HoldStart {
   type: 'HoldStart'
-
-  beat: number
-  lane: number
-  size: number
 
   isGold: boolean
   isTrace: boolean
@@ -52,30 +66,28 @@ export interface HoldStart extends Note {
   isGuide: boolean
   easingType: EasingType
 
-  nextNode: HoldEnd | HoldTick
+  nextNode: Note & { type: 'HoldTick' | 'HoldEnd' }
+
+  holdStart?: Note & { type: 'HoldStart' }
+  holdEnd?: Note & { type: 'HoldEnd' }
 }
 
-export interface HoldEnd extends Note {
+interface HoldEnd {
   type: 'HoldEnd'
-
-  beat: number
-  lane: number
-  size: number
 
   isGold: boolean
   isTrace: boolean
   isHidden: boolean
   flickDir: FlickDirection
 
-  prevNode: HoldStart | HoldTick
+  prevNode: Note & { type: 'HoldStart' | 'HoldTick' }
+
+  holdStart?: Note & { type: 'HoldStart' }
+  holdEnd?: Note & { type: 'HoldEnd' }
 }
 
-export interface HoldTick extends Note {
+interface HoldTick {
   type: 'HoldTick'
-
-  beat: number
-  lane: number
-  size: number
 
   isGold: boolean
   isGuide: boolean
@@ -83,31 +95,37 @@ export interface HoldTick extends Note {
   tickType: TickType
   easingType: EasingType
 
-  nextNode: HoldEnd | HoldTick
-  prevNode: HoldStart | HoldTick
+  nextNode: Note & { type: 'HoldTick' | 'HoldEnd' }
+  prevNode: Note & { type: 'HoldStart' | 'HoldTick' }
+
+  holdStart?: Note & { type: 'HoldStart' }
+  holdEnd?: Note & { type: 'HoldEnd' }
 }
 
-export interface BPMChange extends Note {
+interface BPMChange {
   type: 'BPMChange'
-  size: 0
-  lane: 0
-  beat: number
   BPM: number
 }
 
-export interface HiSpeed extends Note {
+interface HiSpeed {
   type: 'HiSpeed'
-  size: 0
-  lane: 0
-  beat: number
   speed: number
 }
 
-export interface TimeSignature extends Note {
+interface TimeSignature {
   type: 'TimeSignature'
-  size: 0
-  lane: 0
-  beat: number
   top: number
   bottom: number
+}
+
+interface FeverChance {
+  type: 'FeverChance'
+}
+
+interface FeverStart {
+  type: 'FeverStart'
+}
+
+interface Skill {
+  type: 'Skill'
 }

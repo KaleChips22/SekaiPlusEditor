@@ -52,7 +52,7 @@ const Sidebar = () => {
             Options
           </div>
         </div>
-        <div className="w-full h-[50%] bg-neutral-700 p-2 text-sm text-white">
+        <div className="w-full h-[50%] bg-neutral-700 p-2 text-sm text-white overflow-y-scroll">
           {tabSelection2 === 'options' && <NoteOptions />}
         </div>
       </div>

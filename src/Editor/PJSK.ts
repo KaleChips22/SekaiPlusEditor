@@ -1,15 +1,12 @@
-import {
-  BPMChange,
-  HiSpeed,
-  HoldEnd,
-  HoldStart,
-  HoldTick,
-  Note,
-  TapNote,
-  TimeSignature,
-} from './note'
+import { Note } from './note'
+import { ChartMetadata } from './draw'
 
-export const notesToPJSK = (notes: Note[], offset: number) => {
+export const notesToPJSK = (
+  notes: Note[],
+  offset: number,
+  isExtendedChart: boolean,
+  metadata?: ChartMetadata,
+) => {
   const map = new Map<Note, any>()
   const clones: any[] = []
 
@@ -18,86 +15,76 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
     let c: any
 
     if (n.type === 'Tap') {
-      const t = n as TapNote
       c = {
         type: 'Tap',
-        beat: t.beat,
-        lane: t.lane,
-        size: t.size,
-        isGold: t.isGold,
-        isTrace: t.isTrace,
-        flickDir: t.flickDir,
-      } as TapNote
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        flickDir: n.flickDir,
+      }
     } else if (n.type === 'HoldStart') {
-      const h = n as HoldStart
       c = {
         type: 'HoldStart',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isTrace: h.isTrace,
-        isHidden: h.isHidden,
-        isGuide: h.isGuide,
-        easingType: h.easingType,
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        isHidden: n.isHidden,
+        isGuide: n.isGuide,
+        easingType: n.easingType,
         // placeholders; will rewire after all clones are created
-        nextNode: {} as HoldEnd,
-      } as HoldStart
+        nextNode: {} as any,
+      } as any
     } else if (n.type === 'HoldTick') {
-      const h = n as HoldTick
       c = {
         type: 'HoldTick',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isGuide: h.isGuide,
-        tickType: h.tickType,
-        easingType: h.easingType,
-        nextNode: {} as HoldEnd,
-        prevNode: {} as HoldStart,
-      } as HoldTick
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isGuide: n.isGuide,
+        tickType: n.tickType,
+        easingType: n.easingType,
+        nextNode: {} as any,
+        prevNode: {} as any,
+      } as any
     } else if (n.type === 'HoldEnd') {
-      const h = n as HoldEnd
       c = {
         type: 'HoldEnd',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isTrace: h.isTrace,
-        isHidden: h.isHidden,
-        flickDir: h.flickDir,
-        prevNode: {} as HoldStart,
-      } as HoldEnd
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        isHidden: n.isHidden,
+        flickDir: n.flickDir,
+        prevNode: {} as any,
+      } as any
     } else if (n.type === 'BPMChange') {
-      const b = n as BPMChange
       c = {
         type: 'BPMChange',
-        beat: b.beat,
-        lane: 0,
-        size: 0,
-        BPM: b.BPM,
-      } as BPMChange
+        beat: n.beat,
+        BPM: n.BPM,
+        isEvent: true,
+      } as any
     } else if (n.type === 'HiSpeed') {
-      const h = n as HiSpeed
       c = {
         type: 'HiSpeed',
-        beat: h.beat,
-        lane: 0,
-        size: 0,
-        speed: h.speed,
-      } as HiSpeed
+        beat: n.beat,
+        speed: n.speed,
+        isEvent: true,
+      } as any
     } else if (n.type === 'TimeSignature') {
-      const t = n as TimeSignature
       c = {
         type: 'TimeSignature',
-        beat: t.beat,
-        lane: 0,
-        size: 0,
-        top: t.top,
-        bottom: t.bottom,
-      } as TimeSignature
+        beat: n.beat,
+        top: n.top,
+        bottom: n.bottom,
+        isEvent: true,
+      } as any
     } else {
       // fallback shallow clone for unknown types
       c = JSON.parse(JSON.stringify(n))
@@ -131,11 +118,31 @@ export const notesToPJSK = (notes: Note[], offset: number) => {
     offset,
     version: 1.0,
     notes: clones,
+    isExtendedChart,
+    metadata: metadata || {
+      title: '',
+      designer: '',
+      artist: '',
+      jacket: '',
+      masterVolume: 100,
+      BGMVolume: 100,
+      SEVolume: 100,
+    },
   }
 }
 
 export const PJSKToNotes = (chart: any) => {
-  const { notes, offset }: { notes: any[]; offset: number } = chart
+  const {
+    notes,
+    offset,
+    isExtendedChart,
+    metadata,
+  }: {
+    notes: any[]
+    offset: number
+    isExtendedChart: boolean
+    metadata?: ChartMetadata
+  } = chart
   const map = new Map<any, Note>()
   const clones: Note[] = []
 
@@ -144,86 +151,76 @@ export const PJSKToNotes = (chart: any) => {
     let c: Note
 
     if (n.type === 'Tap') {
-      const t = n as TapNote
       c = {
         type: 'Tap',
-        beat: t.beat,
-        lane: t.lane,
-        size: t.size,
-        isGold: t.isGold,
-        isTrace: t.isTrace,
-        flickDir: t.flickDir,
-      } as TapNote
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        flickDir: n.flickDir,
+      }
     } else if (n.type === 'HoldStart') {
-      const h = n as HoldStart
       c = {
         type: 'HoldStart',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isTrace: h.isTrace,
-        isHidden: h.isHidden,
-        isGuide: h.isGuide,
-        easingType: h.easingType,
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        isHidden: n.isHidden,
+        isGuide: n.isGuide,
+        easingType: n.easingType,
         // placeholders; will rewire after all clones are created
-        nextNode: {} as HoldEnd,
-      } as HoldStart
+        nextNode: {} as any,
+      }
     } else if (n.type === 'HoldTick') {
-      const h = n as HoldTick
       c = {
         type: 'HoldTick',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isGuide: h.isGuide,
-        tickType: h.tickType,
-        easingType: h.easingType,
-        nextNode: {} as HoldEnd,
-        prevNode: {} as HoldStart,
-      } as HoldTick
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isGuide: n.isGuide,
+        tickType: n.tickType,
+        easingType: n.easingType,
+        nextNode: {} as any,
+        prevNode: {} as any,
+      }
     } else if (n.type === 'HoldEnd') {
-      const h = n as HoldEnd
       c = {
         type: 'HoldEnd',
-        beat: h.beat,
-        lane: h.lane,
-        size: h.size,
-        isGold: h.isGold,
-        isTrace: h.isTrace,
-        isHidden: h.isHidden,
-        flickDir: h.flickDir,
-        prevNode: {} as HoldStart,
-      } as HoldEnd
+        beat: n.beat,
+        lane: n.lane,
+        size: n.size,
+        isGold: n.isGold,
+        isTrace: n.isTrace,
+        isHidden: n.isHidden,
+        flickDir: n.flickDir,
+        prevNode: {} as any,
+      }
     } else if (n.type === 'BPMChange') {
-      const b = n as BPMChange
       c = {
         type: 'BPMChange',
-        beat: b.beat,
-        lane: 0,
-        size: 0,
-        BPM: b.BPM,
-      } as BPMChange
+        beat: n.beat,
+        BPM: n.BPM,
+        isEvent: true,
+      }
     } else if (n.type === 'HiSpeed') {
-      const h = n as HiSpeed
       c = {
         type: 'HiSpeed',
-        beat: h.beat,
-        lane: 0,
-        size: 0,
-        speed: h.speed,
-      } as HiSpeed
+        beat: n.beat,
+        speed: n.speed,
+        isEvent: true,
+      }
     } else if (n.type === 'TimeSignature') {
-      const t = n as TimeSignature
       c = {
         type: 'TimeSignature',
-        beat: t.beat,
-        lane: 0,
-        size: 0,
-        top: t.top,
-        bottom: t.bottom,
-      } as TimeSignature
+        beat: n.beat,
+        top: n.top,
+        bottom: n.bottom,
+        isEvent: true,
+      }
     } else {
       // fallback shallow clone for unknown types
       c = JSON.parse(JSON.stringify(n))
@@ -254,5 +251,15 @@ export const PJSKToNotes = (chart: any) => {
   return {
     offset,
     notes: clones,
+    isExtendedChart,
+    metadata: metadata || {
+      title: '',
+      designer: '',
+      artist: '',
+      jacket: '',
+      masterVolume: 100,
+      BGMVolume: 100,
+      SEVolume: 100,
+    },
   }
 }

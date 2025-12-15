@@ -6,12 +6,19 @@ import {
   cut,
   deleteSelected,
   flipSelection,
+  isExtendedChart,
   paste,
   repeatHoldMids,
+  setSelectedEaseType,
+  setSelectedFlickType,
+  setSelectedHoldsHidden,
+  setSelectedTickType,
   shrinkSelectedDown,
   shrinkSelectedUp,
   splitHold,
 } from '../editor/draw'
+import { ChevronRight } from 'lucide-react'
+import { EasingType, FlickDirection, TickType } from '../editor/note'
 
 const ContextMenu = () => {
   const [isHidden, setIsHidden] = useState(true)
@@ -56,25 +63,85 @@ const ContextMenu = () => {
       label: 'Flip',
       action: () => flipSelection(),
     },
-    // {
-    //   type: 'separator',
-    // },
-    // {
-    //   label: 'Ease Type',
-    //   action: () => {},
-    // },
-    // {
-    //   label: 'Step Type',
-    //   action: () => {},
-    // },
-    // {
-    //   label: 'Flick Type',
-    //   action: () => {},
-    // },
-    // {
-    //   label: 'Hold Type',
-    //   action: () => {},
-    // },
+    {
+      type: 'separator',
+    },
+    {
+      label: 'Ease Type',
+      submenu: [
+        {
+          label: 'Linear',
+          action: () => setSelectedEaseType(EasingType.Linear),
+        },
+        {
+          label: 'Ease In',
+          action: () => setSelectedEaseType(EasingType.EaseIn),
+        },
+        {
+          label: 'Ease Out',
+          action: () => setSelectedEaseType(EasingType.EaseOut),
+        },
+        ...(isExtendedChart
+          ? [
+              {
+                label: 'Ease In-Out',
+                action: () => setSelectedEaseType(EasingType.EaseInOut),
+              },
+              {
+                label: 'Ease Out-In',
+                action: () => setSelectedEaseType(EasingType.EaseOutIn),
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: 'Step Type',
+      submenu: [
+        {
+          label: 'Normal',
+          action: () => setSelectedTickType(TickType.Normal),
+        },
+        {
+          label: 'Hidden',
+          action: () => setSelectedTickType(TickType.Hidden),
+        },
+        {
+          label: 'Skip',
+          action: () => setSelectedTickType(TickType.Skip),
+        },
+      ],
+    },
+    {
+      label: 'Flick Type',
+      submenu: [
+        {
+          label: 'Default',
+          action: () => setSelectedFlickType(FlickDirection.Default),
+        },
+        {
+          label: 'Left',
+          action: () => setSelectedFlickType(FlickDirection.Left),
+        },
+        {
+          label: 'Right',
+          action: () => setSelectedFlickType(FlickDirection.Right),
+        },
+      ],
+    },
+    {
+      label: 'Hold Type',
+      submenu: [
+        {
+          label: 'Normal',
+          action: () => setSelectedHoldsHidden(false),
+        },
+        {
+          label: 'Hidden',
+          action: () => setSelectedHoldsHidden(true),
+        },
+      ],
+    },
     {
       type: 'separator',
     },
@@ -129,14 +196,44 @@ const ContextMenu = () => {
             <div className="h-[1px] w-full m-1 bg-neutral-600" key={idx} />
           ) : (
             <div
-              className="w-full px-2 py-0.5 rounded-sm hover:bg-neutral-700/50 text-xs text-neutral-300 hover:text-white"
-              onClick={() => {
-                i.action!()
-                setIsHidden(true)
-              }}
+              className={twMerge(
+                'w-full px-2 py-0.5 rounded-sm hover:bg-neutral-700/50 text-xs text-neutral-300 hover:text-white relative',
+                'submenu' in i ? 'group' : '',
+              )}
+              {...('action' in i
+                ? {
+                    onClick: () => {
+                      i.action!()
+                      setIsHidden(true)
+                    },
+                  }
+                : {})}
               key={idx}
             >
-              {i.label}
+              <div className="flex w-full items-center justify-center gap-1">
+                <span className="flex-1">{i.label}</span>
+                {'submenu' in i && (
+                  <ChevronRight className="size-3 color-inherit" />
+                )}
+              </div>
+              {'submenu' in i && (
+                <div className="hidden group-hover:flex absolute -top-1 left-full z-100 w-fit min-h-full p-2">
+                  <div className="p-1 rounded-md bg-neutral-800 border-1 border-neutral-700 text-white z-9999 text-xs min-w-25 flex flex-col items-center justify-center">
+                    {i.submenu!.map((subI, subIndex) => (
+                      <div
+                        key={subIndex}
+                        className="w-full px-2 py-0.5 rounded-sm hover:bg-neutral-700/50 text-xs text-neutral-300 hover:text-white relative"
+                        onClick={() => {
+                          subI.action()
+                          setIsHidden(true)
+                        }}
+                      >
+                        {subI.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ),
         )}
