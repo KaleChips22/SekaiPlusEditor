@@ -1,15 +1,26 @@
 import {
   chartNotes,
   cursorPos,
+  decGoldHoldsPlaying,
+  decHoldsPlaying,
   getBPM,
   getNoteImageName,
   getScaledTime,
   getTime,
   goldGuideColor,
+  goldHoldsPlaying,
   guideColor,
   height,
+  holdsPlaying,
+  incGoldHoldsPlaying,
+  incHoldsPlaying,
   isPlaying,
+  noteFxPlayers,
+  playLong,
+  playLongGold,
   setCursorPos,
+  stopLong,
+  stopLongGold,
   width,
 } from '../editor/draw'
 import {
@@ -1159,7 +1170,72 @@ const drawPreview = (timeStamp: number) => {
   // drawText('Speed: ' + hiSpeed.toString().slice(0, 5) + 'x', 40, 190, 80)
 
   if (isPlaying) {
+    const pBeat = cursorPos
+
     setCursorPos(cursorPos + (getBPM(cursorPos) * deltaTime) / 60000)
+
+    chartNotes
+      .filter((n) => n.beat >= pBeat && n.beat < cursorPos)
+      .forEach((n) => {
+        if (['Tap', 'HoldStart', 'HoldEnd', 'HoldTick'].includes(n.type)) {
+          if (n.type === 'HoldStart') {
+            if (n.isGuide) return
+
+            if (n.isGold) {
+              if (goldHoldsPlaying === 0) {
+                playLongGold()
+              }
+
+              incGoldHoldsPlaying()
+            } else {
+              if (holdsPlaying === 0) {
+                playLong()
+              }
+
+              incHoldsPlaying()
+            }
+
+            if (n.isHidden) return
+          }
+          if (n.type === 'HoldEnd') {
+            if (n.prevNode.isGuide) return
+
+            if (n.prevNode.isGold) {
+              decGoldHoldsPlaying()
+
+              if (goldHoldsPlaying === 0) {
+                stopLongGold()
+              }
+            } else {
+              decHoldsPlaying()
+
+              if (holdsPlaying === 0) {
+                stopLong()
+              }
+            }
+
+            if (n.isHidden) return
+          }
+          const note = n as any
+          let p: HTMLAudioElement
+          if (n.type === 'HoldTick') {
+            if (n.tickType !== TickType.Hidden)
+              p = note.isGold ? noteFxPlayers.critTick : noteFxPlayers.tick
+            else return
+          } else if (
+            n.type !== 'HoldStart' &&
+            note.flickDir !== FlickDirection.None
+          ) {
+            p = note.isGold ? noteFxPlayers.critFlick : noteFxPlayers.flick
+          } else if (note.isTrace) {
+            p = note.isGold ? noteFxPlayers.critTrace : noteFxPlayers.trace
+          } else {
+            p = note.isGold ? noteFxPlayers.critical : noteFxPlayers.tap
+          }
+          p.currentTime = 0
+          p.play()
+        }
+      })
   }
 
   // Draw stage background

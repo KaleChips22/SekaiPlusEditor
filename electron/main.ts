@@ -166,6 +166,10 @@ function createSettingsWindow() {
     win?.webContents.send('update-options', options)
     settingsWindow?.webContents.send('update-options', options)
   })
+
+  settingsWindow.webContents.ipc.on('close-settings', () => {
+    settingsWindow?.close()
+  })
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -278,7 +282,7 @@ const options = {
   accentColor: 'purple',
   hideTickOutlines: false,
   hideTickOutlinesOnPlay: true,
-  laneWidth: 55,
+  laneWidth: 30,
 }
 
 ipcMain.handle('show-settings', () => {
