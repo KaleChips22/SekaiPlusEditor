@@ -7,7 +7,6 @@ import {
   setMusicScoreName,
   getChartMetadata,
   setChartMetadata,
-  getIsExtendedChart,
 } from '../../editor/draw'
 
 const ChartProperties = () => {
@@ -23,7 +22,6 @@ const ChartProperties = () => {
       masterVolume: metadata.masterVolume,
       BGMVolume: metadata.BGMVolume,
       SEVolume: metadata.SEVolume,
-      isExtendedChart: false,
     }
   })
 
@@ -52,7 +50,6 @@ const ChartProperties = () => {
   useEffect(() => {
     const handleMetadataLoaded = () => {
       const metadata = getChartMetadata()
-      const extended = getIsExtendedChart()
       setFormData((prev) => ({
         ...prev,
         title: metadata.title,
@@ -62,7 +59,6 @@ const ChartProperties = () => {
         masterVolume: metadata.masterVolume,
         BGMVolume: metadata.BGMVolume,
         SEVolume: metadata.SEVolume,
-        isExtendedChart: extended,
       }))
     }
 

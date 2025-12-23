@@ -20,9 +20,9 @@ import {
 // import { uscToSUS } from './USCtoSUS'
 import { USCtoSUS } from './USCtoSUSv2'
 
-const BEAT_HEIGHT = 220
-export let laneWidth = 55
-const NOTE_HEIGHT = 45
+const BEAT_HEIGHT = 110 * window.devicePixelRatio
+export let laneWidth = 25 * window.devicePixelRatio
+const NOTE_HEIGHT = 22.5 * window.devicePixelRatio
 
 // let tSigTop = 4
 // let tSigBottom = 4
@@ -61,7 +61,7 @@ export const setOptions = (options: any) => {
   for (const [k, v] of Object.entries(options) as [string, any]) {
     if (k === 'hideTickOutlines') hideTickOutlines = v
     if (k === 'hideTickOutlinesOnPlay') hideTickOutlinesOnPlay = v
-    if (k === 'laneWidth') laneWidth = v
+    if (k === 'laneWidth') laneWidth = v * window.devicePixelRatio
   }
 }
 
@@ -118,10 +118,27 @@ export const getChartMetadata = () => chartMetadata
 
 export const setChartMetadata = (metadata: Partial<ChartMetadata>) => {
   chartMetadata = { ...chartMetadata, ...metadata }
+
+  if ('masterVolume' in metadata) {
+    musicPlayer.volume =
+      (chartMetadata.masterVolume / 100) * chartMetadata.BGMVolume
+    Object.values(noteFxPlayers).forEach((p) => {
+      p.volume =
+        (chartMetadata.masterVolume / 100) * (chartMetadata.SEVolume / 100)
+    })
+  } else if ('BGMVolume' in metadata) {
+    musicPlayer.volume =
+      (chartMetadata.masterVolume / 100) * (chartMetadata.BGMVolume / 100)
+  } else if ('SEVolume' in metadata) {
+    Object.values(noteFxPlayers).forEach((p) => {
+      p.volume =
+        (chartMetadata.masterVolume / 100) * (chartMetadata.SEVolume / 100)
+    })
+  }
 }
 
-export const resetChartMetadata = () => {
-  chartMetadata = {
+export const resetChartMetadata = () =>
+  setChartMetadata({
     title: '',
     designer: '',
     artist: '',
@@ -129,13 +146,12 @@ export const resetChartMetadata = () => {
     masterVolume: 100,
     BGMVolume: 100,
     SEVolume: 100,
-  }
-}
+  })
 
 const musicPlayer = new Audio()
 let currentMusicUrl: string | null = null
 
-const noteFxPlayers = {
+export const noteFxPlayers = {
   critTick: new Audio('sound/note_sfx/se_live_connect_critical.mp3'),
   tick: new Audio('sound/note_sfx/se_live_connect.mp3'),
   critFlick: new Audio('sound/note_sfx/se_live_flick_critical.mp3'),
@@ -146,8 +162,12 @@ const noteFxPlayers = {
   tap: new Audio('sound/note_sfx/se_live_perfect.mp3'),
 }
 
-let goldHoldsPlaying = 0
-let holdsPlaying = 0
+export let goldHoldsPlaying = 0
+export let holdsPlaying = 0
+export const incGoldHoldsPlaying = () => goldHoldsPlaying++
+export const decGoldHoldsPlaying = () => goldHoldsPlaying--
+export const incHoldsPlaying = () => holdsPlaying++
+export const decHoldsPlaying = () => holdsPlaying--
 
 Object.values(noteFxPlayers).forEach((p) => p.load())
 
@@ -172,7 +192,7 @@ const initSounds = async () => {
   )
 }
 
-const playLong = () => {
+export const playLong = () => {
   sourceLong = longContext.createBufferSource()
   sourceLong.buffer = longBuffer
   sourceLong.connect(longContext.destination)
@@ -180,11 +200,11 @@ const playLong = () => {
   sourceLong.start(0)
 }
 
-const stopLong = () => {
+export const stopLong = () => {
   sourceLong.stop()
 }
 
-const playLongGold = () => {
+export const playLongGold = () => {
   sourceLongGold = longGoldContext.createBufferSource()
   sourceLongGold.buffer = longGoldBuffer
   sourceLongGold.connect(longGoldContext.destination)
@@ -192,7 +212,7 @@ const playLongGold = () => {
   sourceLongGold.start(0)
 }
 
-const stopLongGold = () => {
+export const stopLongGold = () => {
   sourceLongGold.stop()
 }
 
@@ -1097,6 +1117,8 @@ const toggleIsPlaying = () => {
     musicPlayer.pause()
     stopLong()
     stopLongGold()
+    holdsPlaying = 0
+    goldHoldsPlaying = 0
 
     Object.values(noteFxPlayers).forEach((p) => {
       p.pause()
@@ -1358,7 +1380,7 @@ const getNearestDivision = (beat: number): number => {
 }
 
 const getEventSize = (event: SolidEvent): { width: number; height: number } => {
-  const fontSize = '24px'
+  const fontSize = 12 * window.devicePixelRatio + 'px'
   const fontFamily = 'Arial'
 
   const textEl = document.createElement('p')
@@ -1588,7 +1610,7 @@ const drawDivisions = (
         const measureIndex = Math.floor(kRelative / measureSubCount)
         // annotate first measure of a new time signature with the signature text
 
-        ctx.font = '24px Arial'
+        ctx.font = 12 * window.devicePixelRatio + 'px Arial'
         ctx.textAlign = 'right'
         ctx.fillText(
           measureIndex.toString(),
@@ -1688,7 +1710,7 @@ const drawWaveform = () => {
 
 export const getNoteImageName = (n: Note): string => {
   let noteImageName = 'notes_2'
-  if (n.type === 'HoldTick') return 'tick'
+  if (n.type === 'HoldTick') return 'notes_2'
   else if (n.type === 'Tap') {
     if (n.isTrace) {
       if (n.isGold) noteImageName = 'notes_5'
@@ -1733,7 +1755,7 @@ const drawNote = (n: Note) => {
     if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#ff4444'
     ctx.stroke()
 
-    const fontSize = '24px'
+    const fontSize = 12 * window.devicePixelRatio + 'px'
     const fontFamily = 'arial'
 
     const { width: eventWidth, height: eventHeight } = getEventSize(n)
@@ -1766,7 +1788,7 @@ const drawNote = (n: Note) => {
     if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#ffff99'
     ctx.stroke()
 
-    const fontSize = '24px'
+    const fontSize = 12 * window.devicePixelRatio + 'px'
     const fontFamily = 'arial'
 
     const { width: eventWidth, height: eventHeight } = getEventSize(n)
@@ -1799,7 +1821,7 @@ const drawNote = (n: Note) => {
     if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#99ff99'
     ctx.stroke()
 
-    const fontSize = '24px'
+    const fontSize = 12 * window.devicePixelRatio + 'px'
     const fontFamily = 'arial'
 
     const { width: eventWidth, height: eventHeight } = getEventSize(n)
@@ -1836,7 +1858,7 @@ const drawNote = (n: Note) => {
     if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#bb88ee'
     ctx.stroke()
 
-    const fontSize = '24px'
+    const fontSize = 12 * window.devicePixelRatio + 'px'
     const fontFamily = 'arial'
 
     const { width: eventWidth, height: eventHeight } = getEventSize(n)
@@ -1873,7 +1895,7 @@ const drawNote = (n: Note) => {
     if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#bb88ee'
     ctx.stroke()
 
-    const fontSize = '24px'
+    const fontSize = 12 * window.devicePixelRatio + 'px'
     const fontFamily = 'arial'
 
     const { width: eventWidth, height: eventHeight } = getEventSize(n)
@@ -1911,7 +1933,7 @@ const drawNote = (n: Note) => {
     if (selectedIndeces.has(chartNotes.indexOf(n))) ctx.strokeStyle = '#7799ff'
     ctx.stroke()
 
-    const fontSize = '24px'
+    const fontSize = 12 * window.devicePixelRatio + 'px'
     const fontFamily = 'arial'
 
     const { width: eventWidth, height: eventHeight } = getEventSize(n)
@@ -1934,7 +1956,7 @@ const drawNote = (n: Note) => {
 
   const { lane, size } = n
 
-  let aspectRatio = 4
+  let aspectRatio = 8 / window.devicePixelRatio
 
   const x = width / 2 + (lane * 2 - size) * laneWidth
   const w = size * 2 * laneWidth
@@ -1974,10 +1996,10 @@ const drawNote = (n: Note) => {
     const edgeSize = NOTE_HEIGHT
     aspectRatio = rect.h / NOTE_HEIGHT
 
-    const x1 = x - 15
+    const x1 = x - edgeSize / 3
     const w1 = edgeSize
 
-    const x3 = x + w - NOTE_HEIGHT + 15
+    const x3 = x + w - NOTE_HEIGHT + edgeSize / 3
     const w3 = w1
 
     const x2 = x1 + w1 //- 1
@@ -2464,9 +2486,6 @@ const draw = (timeStamp: number) => {
   if (ctx === null) return
   if (lastTime == undefined) lastTime = timeStamp
   const deltaTime = timeStamp - lastTime
-
-  ctx.resetTransform()
-  ctx.scale(2 / devicePixelRatio, 2 / devicePixelRatio)
 
   if (hasCachedScaledTimes) disableCachedScaledTimes()
 
