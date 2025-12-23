@@ -4,6 +4,7 @@
     "": {
       "name": "sekaipluseditor",
       "dependencies": {
+        "@sonolus/core": "^7.14.2",
         "@tailwindcss/vite": "^4.1.14",
         "electron-updater": "^6.6.2",
         "lucide-react": "^0.545.0",
@@ -217,6 +218,8 @@
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.52.4", "", { "os": "win32", "cpu": "x64" }, "sha512-bf9PtUa0u8IXDVxzRToFQKsNCRz9qLYfR/MpECxl4mRoWYjAeFjgxj1XdZr2M/GNVpT05p+LgQOHopYDlUu6/w=="],
 
     "@sindresorhus/is": ["@sindresorhus/is@4.6.0", "", {}, "sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw=="],
+
+    "@sonolus/core": ["@sonolus/core@7.14.2", "", {}, "sha512-3PlT1hMvubqHDB1pZn7jnoimOPGfN+HcLrCmGhTqC+FqCJiZEtoJFiYH4AbEb/sw1gTVGVooQuVvoYsBt3X0wg=="],
 
     "@szmarczak/http-timer": ["@szmarczak/http-timer@4.0.6", "", { "dependencies": { "defer-to-connect": "^2.0.0" } }, "sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w=="],
 
