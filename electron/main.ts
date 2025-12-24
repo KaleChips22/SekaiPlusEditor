@@ -3,12 +3,6 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { menuData, titleBarHeight, trafficLightsSize } from '../shared'
 import fs from 'fs/promises'
-import electronUpdater, { type AppUpdater } from 'electron-updater'
-
-function getAutoUpdater(): AppUpdater {
-  const { autoUpdater } = electronUpdater
-  return autoUpdater
-}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -191,8 +185,6 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(() => {
-  getAutoUpdater().checkForUpdatesAndNotify()
-
   createWindow()
 
   // console.log(win !== null && 'webContents' in win)
