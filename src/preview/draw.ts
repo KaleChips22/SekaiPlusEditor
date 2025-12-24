@@ -174,7 +174,7 @@ const getTexture = (image: HTMLImageElement): WebGLTexture | null => {
 }
 
 // Draw an arbitrary quad with texture
-const drawQuad = (
+export const drawQuad = (
   x1: number,
   y1: number,
   x2: number,
@@ -504,7 +504,7 @@ const noteImageSource = new Image()
 noteImageSource.src = 'editor_sprites/notes.png'
 
 const particleImageSource = new Image()
-particleImageSource.src = 'particle/particles.png'
+particleImageSource.src = 'particle/texture.png'
 
 const holdNoteImageSource = new Image()
 holdNoteImageSource.src = 'editor_sprites/longNoteLine.png'
