@@ -23,9 +23,10 @@ export const openFile = () => {
     const result = await window.ipcRenderer.openFile()
 
     if (result) {
-      let json = JSON.parse(result.content)
+      let json = {}
       if (result.filePath.endsWith('.sus'))
         json = { usc: susToUSC(result.content) }
+      else json = JSON.parse(result.content)
 
       if ('usc' in json) {
         // console.log(json)

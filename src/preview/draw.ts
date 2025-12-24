@@ -33,7 +33,10 @@ import {
 import { getRect } from '../editor/noteImage'
 import * as holdNoteRect from '../sprite_sheet/longNoteLine.json'
 
-const playSpeed = 12
+export let playSpeed = 12
+export const setGameAccuratePreviewScrollSpeed = (speed: number) => {
+  playSpeed = (speed / 12) ** 2 * 24
+}
 
 export let hasCachedScaledTimes = false
 export const disableCachedScaledTimes = () => (hasCachedScaledTimes = false)

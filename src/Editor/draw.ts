@@ -15,6 +15,7 @@ import { historyManager } from './history'
 import {
   disableCachedScaledTimes,
   hasCachedScaledTimes,
+  setGameAccuratePreviewScrollSpeed,
   updateBox,
 } from '../preview/draw'
 // import { uscToSUS } from './USCtoSUS'
@@ -62,6 +63,7 @@ export const setOptions = (options: any) => {
     if (k === 'hideTickOutlines') hideTickOutlines = v
     if (k === 'hideTickOutlinesOnPlay') hideTickOutlinesOnPlay = v
     if (k === 'laneWidth') laneWidth = v * window.devicePixelRatio
+    if (k === 'noteSpeed') setGameAccuratePreviewScrollSpeed(v)
   }
 }
 

@@ -275,6 +275,7 @@ const options = {
   hideTickOutlines: false,
   hideTickOutlinesOnPlay: true,
   laneWidth: 30,
+  noteSpeed: 6,
 }
 
 ipcMain.handle('show-settings', () => {
