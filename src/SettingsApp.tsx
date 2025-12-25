@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { accentColorList, setAccentColor } from '../shared'
+import { accentColorList, defaultOptions, setAccentColor } from '../shared'
 import { XIcon } from 'lucide-react'
 
 const SettingsApp = () => {
@@ -9,12 +9,7 @@ const SettingsApp = () => {
     'visual' | 'preview' | 'timeline'
   >('visual')
 
-  const [allOptions, setAllOptions] = useState({
-    hideTickOutlines: false,
-    hideTickOutlinesOnPlay: true,
-    laneWidth: 30,
-    noteSpeed: 6,
-  })
+  const [allOptions, setAllOptions] = useState(defaultOptions)
 
   const isMac = platform === 'darwin'
 
@@ -143,6 +138,36 @@ const SettingsApp = () => {
                   }
                 />
               </div>
+              <div className="flex w-full items-start justify-between gap-0.5">
+                <h2 className="font-medium text-md">
+                  Show Editor and Preview Side-by-Side
+                </h2>
+                <input
+                  type="checkbox"
+                  className="accent-accent"
+                  checked={allOptions.editorSideBySide}
+                  onClick={() =>
+                    window.ipcRenderer.send('set-options', {
+                      editorSideBySide: !allOptions.editorSideBySide,
+                    })
+                  }
+                />
+              </div>
+              {allOptions.editorSideBySide && (
+                <div className="flex w-full items-start justify-between gap-0.5">
+                  <h2 className="font-medium text-md">Flip Side-by-Side</h2>
+                  <input
+                    type="checkbox"
+                    className="accent-accent"
+                    checked={allOptions.sideBySideFlip}
+                    onClick={() =>
+                      window.ipcRenderer.send('set-options', {
+                        sideBySideFlip: !allOptions.sideBySideFlip,
+                      })
+                    }
+                  />
+                </div>
+              )}
             </>
           )}
           {selectedTab === 'timeline' && (

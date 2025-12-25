@@ -37,6 +37,9 @@ export let isPlaying = false
 export let isPreviewing = false
 export const setPreviewing = (p: boolean) => (isPreviewing = p)
 
+let editorSideBySide = false
+export const setEditorSideBySide = (s: boolean) => (editorSideBySide = s)
+
 let mouseIsPressed = false
 let pMouseIsPressed = false
 let mouseX: number | null = null
@@ -3262,7 +3265,9 @@ const draw = (timeStamp: number) => {
 
   if (isPlaying) {
     const pBeat = cursorPos
-    cursorPos += (getBPM(cursorPos) * deltaTime) / 60000
+    if (!editorSideBySide) {
+      cursorPos += (getBPM(cursorPos) * deltaTime) / 60000
+    }
     // compute pixel offset for current beat accounting for time-signature bottoms
     const pixels = getPixelsFromZero(cursorPos)
     // keep cursor at a fixed vertical position (height - 250)
@@ -3270,68 +3275,70 @@ const draw = (timeStamp: number) => {
 
     // const pTime = getTime(cursorPos) - deltaTime
 
-    chartNotes
-      .filter((n) => n.beat >= pBeat && n.beat < cursorPos)
-      .forEach((n) => {
-        if (['Tap', 'HoldStart', 'HoldEnd', 'HoldTick'].includes(n.type)) {
-          if (n.type === 'HoldStart') {
-            if (n.isGuide) return
+    if (!editorSideBySide) {
+      chartNotes
+        .filter((n) => n.beat >= pBeat && n.beat < cursorPos)
+        .forEach((n) => {
+          if (['Tap', 'HoldStart', 'HoldEnd', 'HoldTick'].includes(n.type)) {
+            if (n.type === 'HoldStart') {
+              if (n.isGuide) return
 
-            if (n.isGold) {
-              if (goldHoldsPlaying === 0) {
-                playLongGold()
+              if (n.isGold) {
+                if (goldHoldsPlaying === 0) {
+                  playLongGold()
+                }
+
+                goldHoldsPlaying++
+              } else {
+                if (holdsPlaying === 0) {
+                  playLong()
+                }
+
+                holdsPlaying++
               }
 
-              goldHoldsPlaying++
-            } else {
-              if (holdsPlaying === 0) {
-                playLong()
-              }
-
-              holdsPlaying++
+              if (n.isHidden) return
             }
+            if (n.type === 'HoldEnd') {
+              if (n.prevNode.isGuide) return
 
-            if (n.isHidden) return
-          }
-          if (n.type === 'HoldEnd') {
-            if (n.prevNode.isGuide) return
+              if (n.prevNode.isGold) {
+                goldHoldsPlaying--
 
-            if (n.prevNode.isGold) {
-              goldHoldsPlaying--
+                if (goldHoldsPlaying === 0) {
+                  stopLongGold()
+                }
+              } else {
+                holdsPlaying--
 
-              if (goldHoldsPlaying === 0) {
-                stopLongGold()
+                if (holdsPlaying === 0) {
+                  stopLong()
+                }
               }
-            } else {
-              holdsPlaying--
 
-              if (holdsPlaying === 0) {
-                stopLong()
-              }
+              if (n.isHidden) return
             }
-
-            if (n.isHidden) return
+            const note = n as any
+            let p: HTMLAudioElement
+            if (n.type === 'HoldTick') {
+              if (n.tickType !== TickType.Hidden)
+                p = note.isGold ? noteFxPlayers.critTick : noteFxPlayers.tick
+              else return
+            } else if (
+              n.type !== 'HoldStart' &&
+              note.flickDir !== FlickDirection.None
+            ) {
+              p = note.isGold ? noteFxPlayers.critFlick : noteFxPlayers.flick
+            } else if (note.isTrace) {
+              p = note.isGold ? noteFxPlayers.critTrace : noteFxPlayers.trace
+            } else {
+              p = note.isGold ? noteFxPlayers.critical : noteFxPlayers.tap
+            }
+            p.currentTime = 0
+            p.play()
           }
-          const note = n as any
-          let p: HTMLAudioElement
-          if (n.type === 'HoldTick') {
-            if (n.tickType !== TickType.Hidden)
-              p = note.isGold ? noteFxPlayers.critTick : noteFxPlayers.tick
-            else return
-          } else if (
-            n.type !== 'HoldStart' &&
-            note.flickDir !== FlickDirection.None
-          ) {
-            p = note.isGold ? noteFxPlayers.critFlick : noteFxPlayers.flick
-          } else if (note.isTrace) {
-            p = note.isGold ? noteFxPlayers.critTrace : noteFxPlayers.trace
-          } else {
-            p = note.isGold ? noteFxPlayers.critical : noteFxPlayers.tap
-          }
-          p.currentTime = 0
-          p.play()
-        }
-      })
+        })
+    }
   }
 
   if (yOffset < -150) yOffset = -150

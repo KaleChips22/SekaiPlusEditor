@@ -68,3 +68,13 @@ export const accentColorList = [
   'purple',
   'pink',
 ]
+
+export const defaultOptions = {
+  accentColor: 'purple',
+  hideTickOutlines: false,
+  hideTickOutlinesOnPlay: true,
+  laneWidth: 30,
+  noteSpeed: 6,
+  editorSideBySide: false,
+  sideBySideFlip: false,
+}
