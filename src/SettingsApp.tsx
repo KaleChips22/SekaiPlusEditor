@@ -1,19 +1,15 @@
 import { useEffect, useState } from 'react'
 import { twMerge } from 'tailwind-merge'
-import { accentColorList, setAccentColor } from '../shared'
+import { accentColorList, defaultOptions, setAccentColor } from '../shared'
 import { XIcon } from 'lucide-react'
 
 const SettingsApp = () => {
   const [platform, setPlatform] = useState<string | null>(null)
-  const [selectedTab, setSelectedTab] = useState<'visual' | 'timeline'>(
-    'visual',
-  )
+  const [selectedTab, setSelectedTab] = useState<
+    'visual' | 'preview' | 'timeline'
+  >('visual')
 
-  const [allOptions, setAllOptions] = useState({
-    hideTickOutlines: false,
-    hideTickOutlinesOnPlay: true,
-    laneWidth: 30,
-  })
+  const [allOptions, setAllOptions] = useState(defaultOptions)
 
   const isMac = platform === 'darwin'
 
@@ -42,7 +38,7 @@ const SettingsApp = () => {
       window.ipcRenderer.removeAllListeners('main-process-message')
       window.ipcRenderer.removeAllListeners('update-options')
     }
-  }, [])
+  }, [allOptions])
   return (
     <div
       className={twMerge(
@@ -82,6 +78,15 @@ const SettingsApp = () => {
             onClick={() => setSelectedTab('timeline')}
           >
             Timeline
+          </div>
+          <div
+            className={twMerge(
+              'rounded-md w-full px-2 py-1 bg-white/10 hover:bg-white/15 max-w-30 cursor-pointer',
+              selectedTab === 'preview' && 'bg-accent hover:bg-accent',
+            )}
+            onClick={() => setSelectedTab('preview')}
+          >
+            Preview
           </div>
         </div>
         <div className="flex-1 p-2 flex items-start justify-center flex-col gap-1.5 text-sm min-w-3/5">
@@ -133,21 +138,74 @@ const SettingsApp = () => {
                   }
                 />
               </div>
+              <div className="flex w-full items-start justify-between gap-0.5">
+                <h2 className="font-medium text-md">
+                  Show Editor and Preview Side-by-Side
+                </h2>
+                <input
+                  type="checkbox"
+                  className="accent-accent"
+                  checked={allOptions.editorSideBySide}
+                  onClick={() =>
+                    window.ipcRenderer.send('set-options', {
+                      editorSideBySide: !allOptions.editorSideBySide,
+                    })
+                  }
+                />
+              </div>
+              {allOptions.editorSideBySide && (
+                <div className="flex w-full items-start justify-between gap-0.5">
+                  <h2 className="font-medium text-md">Flip Side-by-Side</h2>
+                  <input
+                    type="checkbox"
+                    className="accent-accent"
+                    checked={allOptions.sideBySideFlip}
+                    onClick={() =>
+                      window.ipcRenderer.send('set-options', {
+                        sideBySideFlip: !allOptions.sideBySideFlip,
+                      })
+                    }
+                  />
+                </div>
+              )}
             </>
           )}
           {selectedTab === 'timeline' && (
             <>
-              <div className="flex w-full items-start justify-between gap-0.5">
+              <div className="flex w-full items-start justify-between gap-0.5 flex-col">
                 <h2 className="font-medium text-md">Lane Width</h2>
                 <input
-                  type="number"
-                  className="accent-accent bg-black/20 w-20"
+                  type="range"
+                  min={15}
+                  max={65}
+                  step={5}
+                  className="accent-accent bg-black/40 w-full slider"
                   value={allOptions.laneWidth}
                   onChange={(e) =>
                     window.ipcRenderer.send('set-options', {
                       laneWidth: e.currentTarget.value,
                     })
                   }
+                />
+              </div>
+            </>
+          )}
+          {selectedTab === 'preview' && (
+            <>
+              <div className="flex w-full items-start justify-between gap-0.5 flex-col">
+                <h2 className="font-medium text-md">Note Speed</h2>
+                <input
+                  type="range"
+                  min={1}
+                  max={12}
+                  step={0.1}
+                  className="accent-accent bg-black/40 w-full slider"
+                  value={allOptions.noteSpeed}
+                  onChange={(e) => {
+                    window.ipcRenderer.send('set-options', {
+                      noteSpeed: e.currentTarget.value,
+                    })
+                  }}
                 />
               </div>
             </>
