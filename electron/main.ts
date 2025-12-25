@@ -1,8 +1,14 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { menuData, titleBarHeight, trafficLightsSize } from '../shared'
+import {
+  defaultOptions,
+  menuData,
+  titleBarHeight,
+  trafficLightsSize,
+} from '../shared'
 import fs from 'fs/promises'
+import Store from 'electron-store'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -53,7 +59,7 @@ function createWindow() {
       platform: process.platform,
     })
 
-    win?.webContents.send('update-options', options)
+    win?.webContents.send('update-options', options.store)
     win?.webContents.send('version', app.getVersion())
   })
 
@@ -138,7 +144,7 @@ function createSettingsWindow() {
       platform: process.platform,
     })
 
-    settingsWindow?.webContents.send('update-options', options)
+    settingsWindow?.webContents.send('update-options', options.store)
   })
 
   settingsWindow.on('close', () => (settingsWindow = null))
@@ -151,14 +157,14 @@ function createSettingsWindow() {
   }
 
   settingsWindow.webContents.ipc.on('set-options', (_, newOptions: any) => {
-    for (const [k, v] of Object.entries(newOptions)) {
-      if (k in options) {
-        ;(options as any)[k] = v
+    for (const [k, v] of Object.entries(newOptions) as [string, any]) {
+      if (options.has(k)) {
+        options.set(k, v)
       }
     }
 
-    win?.webContents.send('update-options', options)
-    settingsWindow?.webContents.send('update-options', options)
+    win?.webContents.send('update-options', options.store)
+    settingsWindow?.webContents.send('update-options', options.store)
   })
 
   settingsWindow.webContents.ipc.on('close-settings', () => {
@@ -270,13 +276,9 @@ ipcMain.handle('save-file', async (_, filePath, content) => {
   }
 })
 
-const options = {
-  accentColor: 'purple',
-  hideTickOutlines: false,
-  hideTickOutlinesOnPlay: true,
-  laneWidth: 30,
-  noteSpeed: 6,
-}
+const options = new Store({
+  defaults: defaultOptions,
+})
 
 ipcMain.handle('show-settings', () => {
   createSettingsWindow()

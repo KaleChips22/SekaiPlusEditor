@@ -35,7 +35,7 @@ import * as holdNoteRect from '../sprite_sheet/longNoteLine.json'
 
 export let playSpeed = 12
 export const setGameAccuratePreviewScrollSpeed = (speed: number) => {
-  playSpeed = (speed / 12) ** 2 * 24
+  playSpeed = (speed / 12) ** 2 * 18
 }
 
 export let hasCachedScaledTimes = false
@@ -57,6 +57,9 @@ let textCanvas: HTMLCanvasElement | null = null
 // let textTexture: WebGLTexture | null = null
 
 export const setPreviewContext = (canvas: HTMLCanvasElement) => {
+  // Clear the texture cache to prevent using textures from old context
+  textureCache.clear()
+
   gl = canvas.getContext('webgl', {
     alpha: true,
     premultipliedAlpha: true,
@@ -512,17 +515,22 @@ particleImageSource.src = 'particle/particles.png'
 const holdNoteImageSource = new Image()
 holdNoteImageSource.src = 'editor_sprites/longNoteLine.png'
 
-export const updateBox = () => {
-  if (width / height > boxRatio) {
-    box.height = height
+export const updateBox = (w?: number, h?: number) => {
+  const canvasWidth = w ?? width
+  const canvasHeight = h ?? height
+
+  if (canvasWidth / canvasHeight > boxRatio) {
+    // Canvas is wider than target ratio - constrain by height
+    box.height = canvasHeight
     box.width = box.height * boxRatio
-    box.x = (width - box.width) / 2
-    box.y = (height - box.height) / 2
+    box.x = (canvasWidth - box.width) / 2
+    box.y = 0
   } else {
-    box.width = width
+    // Canvas is taller than target ratio - constrain by width
+    box.width = canvasWidth
     box.height = box.width / boxRatio
-    box.x = (width - box.width) / 2
-    box.y = (height - box.height) / 2
+    box.x = 0
+    box.y = (canvasHeight - box.height) / 2
   }
 
   box.vanishingY = box.y - box.height / 25
