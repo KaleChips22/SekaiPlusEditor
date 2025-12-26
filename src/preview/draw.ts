@@ -32,6 +32,7 @@ import {
 } from '../editor/note'
 import { getRect } from '../editor/noteImage'
 import * as holdNoteRect from '../sprite_sheet/longNoteLine.json'
+import { ParticleSystem } from './particles'
 
 export let playSpeed = 12
 export const setGameAccuratePreviewScrollSpeed = (speed: number) => {
@@ -56,6 +57,10 @@ let textCanvas: HTMLCanvasElement | null = null
 // let textCtx: CanvasRenderingContext2D | null = null
 // let textTexture: WebGLTexture | null = null
 
+// Particle system
+let particleSystem: ParticleSystem | null = null
+let enableParticleRendering = false // Set to true to enable particles
+
 export const setPreviewContext = (canvas: HTMLCanvasElement) => {
   // Clear the texture cache to prevent using textures from old context
   textureCache.clear()
@@ -77,6 +82,179 @@ export const setPreviewContext = (canvas: HTMLCanvasElement) => {
   textCanvas.width = 512
   textCanvas.height = 512
   // textCtx = textCanvas.getContext('2d')
+
+  // Initialize particle system
+  particleSystem = new ParticleSystem(gl)
+  particleSystem
+    .loadParticleData('/particle/data.json', '/particle/texture.png')
+    .then(() => {
+      console.log('Particle system loaded successfully')
+      // Particle rendering is disabled by default
+      // Call setParticleRenderingEnabled(true) to enable it
+      setParticleRenderingEnabled(true)
+    })
+    .catch((err) => {
+      console.warn('Failed to load particle data:', err)
+      console.warn('Particle effects will be disabled')
+      particleSystem = null
+    })
+}
+
+/**
+ * Enable or disable particle rendering
+ * @param enabled Whether to enable particle rendering
+ */
+export const setParticleRenderingEnabled = (enabled: boolean) => {
+  enableParticleRendering = enabled
+}
+
+/**
+ * Spawn a particle effect at the specified position with optional rotation
+ * @param effectName Name of the effect from the particle data (e.g., "#NOTE_CIRCULAR_TAP_NEUTRAL")
+ * @param x X position in screen space (center)
+ * @param y Y position in screen space (center)
+ * @param scale Scale of the effect (default 1.0)
+ * @param rotation Rotation in radians (default 0, optional)
+ */
+export const spawnParticleEffect = (
+  effectName: string,
+  x: number,
+  y: number,
+  scale: number = 1.0,
+  rotation?: number,
+) => {
+  if (!particleSystem) return
+
+  if (rotation !== undefined) {
+    particleSystem.spawnEffectWithRotation(effectName, x, y, scale, rotation)
+  } else {
+    particleSystem.spawnEffectSimple(effectName, x, y, scale)
+  }
+}
+
+/**
+ * Spawn a particle effect with full transform control (advanced)
+ * @param effectName Name of the effect from the particle data
+ * @param x1 Top-left X coordinate
+ * @param y1 Top-left Y coordinate
+ * @param x2 Top-right X coordinate
+ * @param y2 Top-right Y coordinate
+ * @param x3 Bottom-left X coordinate
+ * @param y3 Bottom-left Y coordinate
+ * @param x4 Bottom-right X coordinate
+ * @param y4 Bottom-right Y coordinate
+ */
+export const spawnParticleEffectWithTransform = (
+  effectName: string,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  x4: number,
+  y4: number,
+) => {
+  if (!particleSystem) return
+  particleSystem.spawnEffect(effectName, x1, y1, x2, y2, x3, y3, x4, y4)
+}
+
+export const spawnParticleEffectFromRect = (
+  effectName: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) => {
+  if (!particleSystem) return
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  particleSystem.spawnEffect(
+    effectName,
+    x - halfWidth,
+    y - halfHeight,
+    x + halfWidth,
+    y - halfHeight,
+    x - halfWidth,
+    y + halfHeight,
+    x + halfWidth,
+    y + halfHeight,
+  )
+}
+
+// Helper function to create a transform updater for hold particles
+// This allows particles to follow the hold note as it moves along the judgement line
+const createHoldParticleTransformUpdater = (
+  holdStart: Note & { type: 'HoldStart' },
+  yOffset: number,
+  width: number,
+  height: number,
+) => {
+  return () => {
+    const currentScaledTime = getScaledTime(cursorPos)
+    const { lane } = getHoldLaneSizeAt(holdStart, currentScaledTime)
+
+    const y = box.y + box.height * (1 - judgementHeightPercent)
+    const x = box.x + box.width / 2 + laneWidthAtJudgement * lane * 4
+
+    // Scale width based on note size
+    const scaledWidth = width // * size
+    const halfWidth = scaledWidth / 2
+    const halfHeight = height / 2
+
+    return {
+      x1: x - halfWidth,
+      y1: y + yOffset - halfHeight,
+      x2: x + halfWidth,
+      y2: y + yOffset - halfHeight,
+      x3: x - halfWidth,
+      y3: y + yOffset + halfHeight,
+      x4: x + halfWidth,
+      y4: y + yOffset + halfHeight,
+    }
+  }
+}
+
+export const spawnLoopingParticleEffectFromRect = (
+  effectName: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  loopId: string,
+  updateTransform?: () => {
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    x3: number
+    y3: number
+    x4: number
+    y4: number
+  },
+) => {
+  if (!particleSystem) return
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  particleSystem.spawnEffect(
+    effectName,
+    x - halfWidth,
+    y - halfHeight,
+    x + halfWidth,
+    y - halfHeight,
+    x - halfWidth,
+    y + halfHeight,
+    x + halfWidth,
+    y + halfHeight,
+    true,
+    loopId,
+    updateTransform,
+  )
+}
+
+export const stopLoopingParticles = (loopId: string) => {
+  if (!particleSystem) return
+  particleSystem.stopLoopingParticles(loopId)
 }
 
 const initWebGL = () => {
@@ -1189,6 +1367,402 @@ const drawPreview = (timeStamp: number) => {
       .filter((n) => n.beat >= pBeat && n.beat < cursorPos)
       .forEach((n) => {
         if (['Tap', 'HoldStart', 'HoldEnd', 'HoldTick'].includes(n.type)) {
+          n = n as SolidNote
+          //particles
+          const y = box.y + box.height * (1 - judgementHeightPercent)
+          let x = box.x + box.width / 2 + laneWidthAtJudgement * n.lane * 4
+
+          // if (n.type === 'Tap') {
+          if (n.type !== 'HoldTick' && !('isHidden' in n && n.isHidden)) {
+            if (n.isTrace) {
+              if (n.isGold) {
+                if ('flickDir' in n && n.flickDir !== FlickDirection.None) {
+                  const s = laneWidthAtJudgement * 2
+                  const bottomY = y - judgeAreaHeightPercent * box.height * 2
+                  const topY = bottomY - s
+                  let topOff = 0
+                  if (n.flickDir === FlickDirection.Left)
+                    topOff = -laneWidthAtJudgement
+                  else if (n.flickDir === FlickDirection.Right)
+                    topOff = laneWidthAtJudgement
+                  spawnParticleEffectWithTransform(
+                    '#NOTE_LINEAR_ALTERNATIVE_YELLOW',
+                    x - s / 2 + topOff,
+                    topY,
+                    x + s / 2 + topOff,
+                    topY,
+                    x - s / 2,
+                    bottomY,
+                    x + s / 2,
+                    bottomY,
+                  )
+                } else {
+                  spawnParticleEffectFromRect(
+                    'Sekai Trace Note Circular Yellow',
+                    x,
+                    y,
+                    laneWidthAtJudgement * 10,
+                    laneWidthAtJudgement * 10,
+                  )
+                  spawnParticleEffectFromRect(
+                    'Sekai Trace Note Linear Yellow',
+                    x,
+                    y - judgeAreaHeightPercent * box.height * 1.25,
+                    laneWidthAtJudgement * 1.5,
+                    laneWidthAtJudgement * 1.5,
+                  )
+                }
+              } else {
+                if ('flickDir' in n && n.flickDir !== FlickDirection.None) {
+                  const s = laneWidthAtJudgement * 2
+                  const bottomY = y - judgeAreaHeightPercent * box.height * 2
+                  const topY = bottomY - s
+                  let topOff = 0
+                  if (n.flickDir === FlickDirection.Left)
+                    topOff = -laneWidthAtJudgement
+                  else if (n.flickDir === FlickDirection.Right)
+                    topOff = laneWidthAtJudgement
+                  spawnParticleEffectWithTransform(
+                    '#NOTE_LINEAR_ALTERNATIVE_RED',
+                    x - s / 2 + topOff,
+                    topY,
+                    x + s / 2 + topOff,
+                    topY,
+                    x - s / 2,
+                    bottomY,
+                    x + s / 2,
+                    bottomY,
+                  )
+                } else {
+                  spawnParticleEffectFromRect(
+                    'Sekai Trace Note Circular Green',
+                    x,
+                    y,
+                    laneWidthAtJudgement * 10,
+                    laneWidthAtJudgement * 10,
+                  )
+                  spawnParticleEffectFromRect(
+                    'Sekai Trace Note Linear Green',
+                    x,
+                    y - judgeAreaHeightPercent * box.height * 1.25,
+                    laneWidthAtJudgement * 1.5,
+                    laneWidthAtJudgement * 1.5,
+                  )
+                }
+              }
+            } else {
+              if (n.isGold) {
+                if ('flickDir' in n && n.flickDir !== FlickDirection.None) {
+                  spawnParticleEffectFromRect(
+                    '#NOTE_CIRCULAR_TAP_YELLOW',
+                    x,
+                    y,
+                    laneWidthAtJudgement * 5,
+                    laneWidthAtJudgement * 3,
+                  )
+                  spawnParticleEffectFromRect(
+                    '#NOTE_LINEAR_TAP_YELLOW',
+                    x,
+                    y - judgeAreaHeightPercent * box.height * 2,
+                    laneWidthAtJudgement * 3,
+                    laneWidthAtJudgement * 3,
+                  )
+                  for (let i = 0.5; i < n.size * 2; i++) {
+                    spawnParticleEffectFromRect(
+                      'Sekai Slot Linear Alternative Yellow',
+                      x + (i - n.size) * laneWidthAtJudgement * 2,
+                      y - judgeAreaHeightPercent * box.height * 1.75,
+                      laneWidthAtJudgement * 2,
+                      laneWidthAtJudgement * 2,
+                    )
+                  }
+
+                  const s = laneWidthAtJudgement * 2
+                  const bottomY = y - judgeAreaHeightPercent * box.height * 2
+                  const topY = bottomY - s
+                  let topOff = 0
+                  if (n.flickDir === FlickDirection.Left)
+                    topOff = -laneWidthAtJudgement
+                  else if (n.flickDir === FlickDirection.Right)
+                    topOff = laneWidthAtJudgement
+                  spawnParticleEffectWithTransform(
+                    '#NOTE_LINEAR_ALTERNATIVE_YELLOW',
+                    x - s / 2 + topOff,
+                    topY,
+                    x + s / 2 + topOff,
+                    topY,
+                    x - s / 2,
+                    bottomY,
+                    x + s / 2,
+                    bottomY,
+                  )
+                } else {
+                  spawnParticleEffectFromRect(
+                    '#NOTE_CIRCULAR_TAP_YELLOW',
+                    x,
+                    y,
+                    laneWidthAtJudgement * 5,
+                    laneWidthAtJudgement * 3,
+                  )
+                  spawnParticleEffectFromRect(
+                    '#NOTE_LINEAR_TAP_YELLOW',
+                    x,
+                    y - judgeAreaHeightPercent * box.height * 2,
+                    laneWidthAtJudgement * 3,
+                    laneWidthAtJudgement * 3,
+                  )
+                  for (let i = 0.5; i < n.size * 2; i++) {
+                    spawnParticleEffectFromRect(
+                      'Sekai Slot Linear Tap Yellow',
+                      x + (i - n.size) * laneWidthAtJudgement * 2,
+                      y - judgeAreaHeightPercent * box.height * 1.75,
+                      laneWidthAtJudgement * 2,
+                      laneWidthAtJudgement * 2,
+                    )
+                  }
+                }
+              } else {
+                if ('flickDir' in n && n.flickDir !== FlickDirection.None) {
+                  spawnParticleEffectFromRect(
+                    '#NOTE_CIRCULAR_TAP_RED',
+                    x,
+                    y,
+                    laneWidthAtJudgement * 5,
+                    laneWidthAtJudgement * 3,
+                  )
+                  spawnParticleEffectFromRect(
+                    '#NOTE_LINEAR_TAP_RED',
+                    x,
+                    y - judgeAreaHeightPercent * box.height * 2,
+                    laneWidthAtJudgement * 3,
+                    laneWidthAtJudgement * 3,
+                  )
+                  for (let i = 0.5; i < n.size * 2; i++) {
+                    spawnParticleEffectFromRect(
+                      'Sekai Slot Linear Alternative Red',
+                      x + (i - n.size) * laneWidthAtJudgement * 2,
+                      y - judgeAreaHeightPercent * box.height * 1.75,
+                      laneWidthAtJudgement * 2,
+                      laneWidthAtJudgement * 2,
+                    )
+                  }
+
+                  const s = laneWidthAtJudgement * 2
+                  const bottomY = y - judgeAreaHeightPercent * box.height * 2
+                  const topY = bottomY - s
+                  let topOff = 0
+                  if (n.flickDir === FlickDirection.Left)
+                    topOff = -laneWidthAtJudgement
+                  else if (n.flickDir === FlickDirection.Right)
+                    topOff = laneWidthAtJudgement
+                  spawnParticleEffectWithTransform(
+                    '#NOTE_LINEAR_ALTERNATIVE_RED',
+                    x - s / 2 + topOff,
+                    topY,
+                    x + s / 2 + topOff,
+                    topY,
+                    x - s / 2,
+                    bottomY,
+                    x + s / 2,
+                    bottomY,
+                  )
+                } else {
+                  const color = n.type === 'Tap' ? 'CYAN' : 'GREEN'
+                  spawnParticleEffectFromRect(
+                    `#NOTE_CIRCULAR_TAP_${color}`,
+                    x,
+                    y,
+                    laneWidthAtJudgement * 5,
+                    laneWidthAtJudgement * 3,
+                  )
+                  spawnParticleEffectFromRect(
+                    `#NOTE_LINEAR_TAP_${color}`,
+                    x,
+                    y - judgeAreaHeightPercent * box.height * 1.75,
+                    laneWidthAtJudgement * 2,
+                    laneWidthAtJudgement * 2,
+                  )
+                  for (let i = 0.5; i < n.size * 2; i++) {
+                    spawnParticleEffectFromRect(
+                      'Sekai Slot Linear Tap ' +
+                        color[0] +
+                        color.substring(1).toLowerCase(),
+                      x + (i - n.size) * laneWidthAtJudgement * 2,
+                      y - judgeAreaHeightPercent * box.height * 1.75,
+                      laneWidthAtJudgement * 2,
+                      laneWidthAtJudgement * 2,
+                    )
+                  }
+                }
+              }
+            }
+          } else if (n.type === 'HoldTick') {
+            if (n.tickType !== TickType.Hidden) {
+              if (n.tickType === TickType.Skip) {
+                const g = getHoldLaneSizeAt(n.holdStart!, n.scaledHitTime!)
+                x = box.x + box.width / 2 + laneWidthAtJudgement * g.lane * 4
+              }
+
+              if (n.isGold) {
+                spawnParticleEffectFromRect(
+                  '#NOTE_CIRCULAR_ALTERNATIVE_YELLOW',
+                  x,
+                  y,
+                  laneWidthAtJudgement * 10,
+                  laneWidthAtJudgement * 10,
+                )
+                for (let i = 0.5; i < n.size * 2; i++) {
+                  spawnParticleEffectFromRect(
+                    'Sekai Slot Linear Slide Tap Yellow',
+                    x + (i - n.size) * laneWidthAtJudgement * 2,
+                    y - judgeAreaHeightPercent * box.height * 1.75,
+                    laneWidthAtJudgement * 2,
+                    laneWidthAtJudgement * 2,
+                  )
+                }
+              } else {
+                spawnParticleEffectFromRect(
+                  '#NOTE_CIRCULAR_ALTERNATIVE_GREEN',
+                  x,
+                  y,
+                  laneWidthAtJudgement * 10,
+                  laneWidthAtJudgement * 10,
+                )
+                for (let i = 0.5; i < n.size * 2; i++) {
+                  spawnParticleEffectFromRect(
+                    'Sekai Slot Linear Slide Tap Green',
+                    x + (i - n.size) * laneWidthAtJudgement * 2,
+                    y - judgeAreaHeightPercent * box.height * 1.75,
+                    laneWidthAtJudgement * 2,
+                    laneWidthAtJudgement * 2,
+                  )
+                }
+                // spawnParticleEffectFromRect(
+                //   'Sekai Trace Note Linear Yellow',
+                //   x,
+                //   y - judgeAreaHeightPercent * box.height * 1.75,
+                //   laneWidthAtJudgement * 2,
+                //   laneWidthAtJudgement * 2,
+                // )
+              }
+            }
+          }
+          // }
+          // spawnParticleEffectFromRect(
+          //   '#LANE_LINEAR',
+          //   x,
+          //   box.height / 2 + box.y,
+          //   laneWidthAtJudgement * 2,
+          //   box.height,
+          // )
+          // }
+          if (n.type === 'HoldStart' && !n.isGuide) {
+            // Generate unique loop ID for this hold note
+            const loopId = `hold-${n.beat}-${n.lane}`
+
+            if (n.isGold) {
+              spawnLoopingParticleEffectFromRect(
+                '#NOTE_CIRCULAR_HOLD_YELLOW',
+                x,
+                y,
+                laneWidthAtJudgement * 10,
+                laneWidthAtJudgement * 6,
+                loopId,
+                createHoldParticleTransformUpdater(
+                  n,
+                  0,
+                  laneWidthAtJudgement * 10,
+                  laneWidthAtJudgement * 6,
+                ),
+              )
+              spawnLoopingParticleEffectFromRect(
+                '#NOTE_LINEAR_HOLD_YELLOW',
+                x,
+                y - judgeAreaHeightPercent * box.height * 1.75,
+                laneWidthAtJudgement * 3,
+                laneWidthAtJudgement * 3,
+                loopId,
+                createHoldParticleTransformUpdater(
+                  n,
+                  -judgeAreaHeightPercent * box.height * 1.75,
+                  laneWidthAtJudgement * 3,
+                  laneWidthAtJudgement * 3,
+                ),
+              )
+            } else {
+              spawnLoopingParticleEffectFromRect(
+                '#NOTE_CIRCULAR_HOLD_GREEN',
+                x,
+                y,
+                laneWidthAtJudgement * 10,
+                laneWidthAtJudgement * 6,
+                loopId,
+                createHoldParticleTransformUpdater(
+                  n,
+                  0,
+                  laneWidthAtJudgement * 10,
+                  laneWidthAtJudgement * 6,
+                ),
+              )
+              spawnLoopingParticleEffectFromRect(
+                '#NOTE_LINEAR_HOLD_GREEN',
+                x,
+                y - judgeAreaHeightPercent * box.height * 1.75,
+                laneWidthAtJudgement * 3,
+                laneWidthAtJudgement * 3,
+                loopId,
+                createHoldParticleTransformUpdater(
+                  n,
+                  -judgeAreaHeightPercent * box.height * 1.75,
+                  laneWidthAtJudgement * 3,
+                  laneWidthAtJudgement * 3,
+                ),
+              )
+            }
+          }
+
+          if (
+            n.type !== 'HoldTick' &&
+            !(
+              'flickDir' in n &&
+              n.flickDir === FlickDirection.None &&
+              n.isTrace
+            ) &&
+            !('isGuide' in n && n.isGuide) &&
+            !('isHidden' in n && n.isHidden)
+          ) {
+            const x1 = x - laneWidthAtJudgement * 2 * n.size
+            const x2 = x + laneWidthAtJudgement * 2 * n.size
+            // Calculate top coordinates at note spawn point with proper scaling
+            const centerX = box.x + box.width / 2
+            const vanishY = box.vanishingY
+
+            // Use top of play area as spawn point
+            const spawnY = box.y + box.height * 0.25
+            const scaleAtTop = Math.max(0, (spawnY - vanishY) / (y - vanishY))
+
+            // Top left and right positions scaled toward vanishing point
+            const topX1 = centerX + (x1 - centerX) * scaleAtTop
+            const topX2 = centerX + (x2 - centerX) * scaleAtTop
+
+            spawnParticleEffectWithTransform(
+              n.isGold
+                ? 'flickDir' in n && n.flickDir !== FlickDirection.None
+                  ? 'Sekai Critical Flick Lane Linear'
+                  : 'Sekai Critical Lane Linear'
+                : 'Sekai Note Lane Linear',
+              topX1, // TL: left at spawn point (top)
+              spawnY,
+              topX2, // TR: right at spawn point (top)
+              spawnY,
+              x1, // BL: left at judgement (bottom)
+              y,
+              x2, // BR: right at judgement (bottom)
+              y,
+            )
+          }
+
+          // audio
           if (n.type === 'HoldStart') {
             if (n.isGuide) return
 
@@ -1210,6 +1784,17 @@ const drawPreview = (timeStamp: number) => {
           }
           if (n.type === 'HoldEnd') {
             if (n.prevNode.isGuide) return
+
+            // Stop looping particles for this hold
+            const holdStart =
+              n.holdStart ||
+              (() => {
+                let node = n.prevNode
+                while (node.type !== 'HoldStart') node = node.prevNode
+                return node
+              })()
+            const loopId = `hold-${holdStart.beat}-${holdStart.lane}`
+            stopLoopingParticles(loopId)
 
             if (n.prevNode.isGold) {
               decGoldHoldsPlaying()
@@ -1354,6 +1939,11 @@ const drawPreview = (timeStamp: number) => {
         (b as SolidNote).scaledHitTime! - (a as SolidNote).scaledHitTime!,
     )
     .forEach((n) => drawPreviewNote(n, scaledTime, flatTime))
+
+  // Render particles (only if enabled)
+  if (particleSystem && enableParticleRendering) {
+    particleSystem.render()
+  }
 
   lastTime = timeStamp
 }
