@@ -86,7 +86,7 @@ export const setPreviewContext = (canvas: HTMLCanvasElement) => {
   // Initialize particle system
   particleSystem = new ParticleSystem(gl)
   particleSystem
-    .loadParticleData('/particle/data.json', '/particle/texture.png')
+    .loadParticleData('particle/data.json', 'particle/texture.png')
     .then(() => {
       console.log('Particle system loaded successfully')
       // Particle rendering is disabled by default
