@@ -13,6 +13,7 @@
   mac: {
     target: ['dmg'],
     artifactName: '${productName}-Mac-${version}-Installer.${ext}',
+    category: 'public.app-category.utilities',
   },
   win: {
     target: [

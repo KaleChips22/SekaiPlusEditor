@@ -66,8 +66,8 @@ const EditorFooter = ({
         <ZoomOut className="size-5 p-0.5" />
         <input
           type="range"
-          min={0.5}
-          max={10.0}
+          min={0.1}
+          max={15.0}
           step={0.1}
           value={zoom}
           data-suffix="x"
