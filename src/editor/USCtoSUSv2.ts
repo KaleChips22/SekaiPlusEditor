@@ -508,6 +508,8 @@ const dumps = (
     }
   }
 
+  lines.push(`WAVEOFFSET ${score.metadata.waveoffset}`)
+
   const noteMaps = new DefaultDict<
     string,
     {
